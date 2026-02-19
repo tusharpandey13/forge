@@ -10,16 +10,32 @@ Testing strategy and comprehensive test cases for the feature.
 - Design (Test Matrix): `docs/design/DESIGN.md`
 - Requirements: `docs/requirement/REQUIREMENTS.md`
 
-## Test Conventions (from Codebase)
+## Test Conventions (from Codebase Analysis)
 
-| Aspect | Convention | Example |
-|--------|------------|---------|
-| Framework | [jest/vitest/mocha] | [path/to/example.test.ts] |
-| File naming | [*.test.ts / *.spec.ts] | [path/to/example] |
-| Describe blocks | [pattern] | [example] |
-| Mocking approach | [pattern] | [example] |
-| Setup/teardown | [beforeEach/afterEach pattern] | [example] |
-| Assertions | [expect style] | [example] |
+Analyze existing test files in the codebase and document discovered conventions here. This table drives all test planning decisions.
+
+| Aspect | Convention | Example Location |
+|--------|------------|------------------|
+| Framework | [jest/vitest/mocha/pytest/go test/...] | [path/to/example.test.ts] |
+| File naming | [*.test.ts / *.spec.ts / *_test.go / ...] | [path/to/example] |
+| Directory structure | [co-located / __tests__ / test/ / ...] | [path/to/example] |
+| Test grouping | [describe/it / test() / func Test* / ...] | [example] |
+| Mocking approach | [what library, what gets mocked, setup pattern] | [example] |
+| Setup/teardown | [beforeEach/afterEach / setUp/tearDown / ...] | [example] |
+| Assertions | [expect / assert / require / ...] | [example] |
+| Fixtures/factories | [pattern if any] | [path/to/fixtures] |
+
+## Mocking Strategy (from Codebase)
+
+Document the mocking conventions discovered from existing tests. Do NOT invent a mocking strategy — follow what the codebase already does.
+
+| What is Mocked | How | Library/Pattern | Example Location |
+|----------------|-----|-----------------|------------------|
+| [e.g., HTTP calls] | [e.g., interceptor, test server, DI] | [e.g., MSW, nock, httptest, unittest.mock] | [path/to/example] |
+| [e.g., database] | [e.g., in-memory, test container, mock] | [library] | [path/to/example] |
+| [e.g., time] | [e.g., fake timers, clock] | [library] | [path/to/example] |
+
+**Mocking principle:** Only mock at the boundaries the codebase already mocks. Avoid mocking internal modules.
 
 ## Updated Test Matrix
 
@@ -51,8 +67,9 @@ Testing strategy and comprehensive test cases for the feature.
 
 **Setup:**
 ```
-MOCK externalDependency to return { success: true, data: mockData }
+[Follow codebase setup conventions]
 CREATE input = { field: "validValue", count: 5 }
+MOCK [external dependency] using [codebase mocking pattern]
 ```
 
 **Execution:**
@@ -64,12 +81,12 @@ result = CALL targetFunction(input)
 ```
 EXPECT result.status TO_EQUAL "success"
 EXPECT result.items TO_HAVE_LENGTH 5
-EXPECT externalDependency TO_HAVE_BEEN_CALLED_WITH { id: input.field }
+EXPECT [mock] TO_HAVE_BEEN_CALLED_WITH { id: input.field }
 ```
 
 **Teardown:**
 ```
-RESTORE all mocks
+[Follow codebase teardown conventions]
 ```
 
 ---
@@ -80,20 +97,19 @@ RESTORE all mocks
 
 **Setup:**
 ```
-MOCK externalDependency to THROW new Error("Service unavailable")
+MOCK [external dependency] to THROW/RETURN error
 CREATE input = { field: "validValue" }
 ```
 
 **Execution:**
 ```
-EXPECT CALL targetFunction(input) TO_THROW ExternalServiceError
+EXPECT CALL targetFunction(input) TO_THROW [ErrorType]
 ```
 
 **Assertions:**
 ```
-EXPECT error.message TO_CONTAIN "Service unavailable"
-EXPECT error.code TO_EQUAL "EXTERNAL_SERVICE_ERROR"
-EXPECT externalDependency TO_HAVE_BEEN_CALLED_TIMES 3  // retries
+EXPECT error.message TO_CONTAIN "descriptive message"
+EXPECT error.code TO_EQUAL "ERROR_CODE"
 ```
 
 ---
@@ -127,7 +143,7 @@ EXPECT result TO_EQUAL defaultValue
 
 ---
 
-## Flow Tests (Pseudo-E2E)
+## Integration / Flow Tests
 
 ### Suite: [Feature Flow Name]
 
@@ -137,67 +153,43 @@ EXPECT result TO_EQUAL defaultValue
 
 **Description:** End-to-end flow for [user scenario]
 
-**HTTP Mock Handlers:**
+**Test Dependencies:**
 ```
-HANDLER POST /api/resource:
-    IF request.body.action == "create":
-        RESPOND 201 {
-            id: "generated-id",
-            status: "created",
-            data: request.body.data
-        }
-    ELSE:
-        RESPOND 400 { error: "invalid_action" }
-
-HANDLER GET /api/resource/:id:
-    RESPOND 200 {
-        id: params.id,
-        status: "active",
-        details: { ... }
-    }
-
-HANDLER PUT /api/resource/:id:
-    RESPOND 200 {
-        id: params.id,
-        status: "updated"
-    }
+[Set up mocks/stubs following codebase conventions discovered above]
+[e.g., start test server, configure interceptors, seed test database]
 ```
 
 **Setup:**
 ```
-START mock server with handlers
-CREATE client = new FeatureClient(config)
+[Follow codebase setup conventions]
+CREATE client/instance with test configuration
 ```
 
 **Execution:**
 ```
-// Step 1: Create resource
-createResult = CALL client.create({ data: inputData })
+// Step 1: Perform action
+result1 = CALL client.action1({ data: inputData })
 
-// Step 2: Verify creation
-getResult = CALL client.get(createResult.id)
+// Step 2: Verify side effect
+result2 = CALL client.action2(result1.id)
 
-// Step 3: Update resource
-updateResult = CALL client.update(createResult.id, { newData })
-
-// Step 4: Final verification
-finalResult = CALL client.get(createResult.id)
+// Step 3: Follow-up action
+result3 = CALL client.action3(result1.id, { newData })
 ```
 
 **Assertions:**
 ```
-EXPECT createResult.status TO_EQUAL "created"
-EXPECT createResult.id TO_BE_DEFINED
+EXPECT result1.status TO_EQUAL "created"
+EXPECT result1.id TO_BE_DEFINED
 
-EXPECT getResult.status TO_EQUAL "active"
+EXPECT result2.status TO_EQUAL "active"
 
-EXPECT updateResult.status TO_EQUAL "updated"
+EXPECT result3.status TO_EQUAL "updated"
+```
 
-EXPECT finalResult.details TO_MATCH { newData properties }
-
-EXPECT mock POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 1
-EXPECT mock GET /api/resource/:id TO_HAVE_BEEN_CALLED_TIMES 2
-EXPECT mock PUT /api/resource/:id TO_HAVE_BEEN_CALLED_TIMES 1
+**Teardown:**
+```
+[Follow codebase teardown conventions]
 ```
 
 ---
@@ -206,27 +198,20 @@ EXPECT mock PUT /api/resource/:id TO_HAVE_BEEN_CALLED_TIMES 1
 
 **Description:** Verifies recovery when [error condition occurs]
 
-**HTTP Mock Handlers:**
+**Test Dependencies:**
 ```
-LET callCount = 0
-
-HANDLER POST /api/resource:
-    callCount++
-    IF callCount < 3:
-        RESPOND 500 { error: "server_error" }
-    ELSE:
-        RESPOND 201 { id: "recovered-id", status: "created" }
+[Configure mocks to simulate failure then recovery]
 ```
 
 **Execution:**
 ```
-result = CALL client.createWithRetry({ data: inputData })
+result = CALL client.actionWithRetry({ data: inputData })
 ```
 
 **Assertions:**
 ```
-EXPECT result.status TO_EQUAL "created"
-EXPECT mock POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 3
+EXPECT result.status TO_EQUAL "success"
+[Verify retry behavior per codebase conventions]
 ```
 
 ---
@@ -268,7 +253,7 @@ EXPECT mock POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 3
 
 ## Coverage Mapping
 
-### Requirements → Tests
+### Requirements -> Tests
 
 | Requirement | Test IDs | Coverage Status |
 |-------------|----------|-----------------|
@@ -277,7 +262,7 @@ EXPECT mock POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 3
 | NFR-1 (performance) | FT-5 | Covered |
 | NFR-2 (security) | UT-10, FT-3 | Covered |
 
-### Implementation Units → Tests
+### Implementation Units -> Tests
 
 | Impl Unit | Test IDs | Coverage Status |
 |-----------|----------|-----------------|
@@ -291,25 +276,13 @@ EXPECT mock POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 3
 
 | Name | Location | Purpose |
 |------|----------|---------|
-| validUserFixture | `__fixtures__/user.ts` | Standard valid user object |
-| errorResponseFixture | `__fixtures__/errors.ts` | API error response shapes |
+| [fixture name] | [path] | [what it provides] |
 
 ### Factories
 
 | Name | Purpose | Example Usage |
 |------|---------|---------------|
-| createUser | Generate user with overrides | `createUser({ name: "Test" })` |
-| createApiResponse | Generate API response shape | `createApiResponse({ status: 200 })` |
-
-## Mocking Strategy
-
-| Dependency | Mock Type | Reason |
-|------------|-----------|--------|
-| HTTP APIs | HTTP mocking library (e.g., MSW, nock) | Standard for network isolation |
-| Date/Time | jest.useFakeTimers | Deterministic time-based tests |
-| Random | jest.spyOn | Deterministic random values |
-
-**Note:** Avoid mocking internal modules. Only mock external boundaries.
+| [factory name] | [what it generates] | [usage example] |
 
 ---
 

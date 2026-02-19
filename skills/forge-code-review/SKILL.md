@@ -54,7 +54,7 @@ See [review-checklist.md](./review-checklist.md) for detailed checklists per rev
 - All FRs verified by tests
 - All error paths tested
 - All edge cases covered
-- HTTP mocking (e.g., MSW, nock) for network calls only, minimal other mocks
+- Mocking strategy matches codebase conventions (not invented from scratch)
 - Precise assertion expectations
 - Blackbox flow tests (behavior, not implementation)
 

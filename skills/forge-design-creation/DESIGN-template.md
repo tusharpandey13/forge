@@ -133,11 +133,11 @@ flowchart LR
 | UT-1 | [component] | Happy path description | [input] | [expected] | P0 |
 | UT-2 | [component] | Error case description | [input] | [error] | P0 |
 
-### Flow Tests (Pseudo-E2E with HTTP Mocking)
+### Integration / Flow Tests
 
-| ID | Flow | Steps | HTTP Mocks | Assertions | Priority |
-|----|------|-------|------------------|------------|----------|
-| FT-1 | [flow name] | 1. action 2. action | POST /api → 200 | [assertions] | P0 |
+| ID | Flow | Steps | Test Dependencies | Assertions | Priority |
+|----|------|-------|-------------------|------------|----------|
+| FT-1 | [flow name] | 1. action 2. action | [mocks/stubs per codebase conventions] | [assertions] | P0 |
 
 ### Edge Cases
 

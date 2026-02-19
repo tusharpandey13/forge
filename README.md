@@ -11,7 +11,7 @@ LLM-assisted coding works best with clear boundaries. Without structure, context
 - **Artifacts over conversation** — every phase writes a document, not just chat
 - **Review gates** — no phase proceeds without explicit review
 - **Fresh context** — start new conversations between major phases to avoid context degradation
-- **Behavior-first testing** — blackbox tests with HTTP mocking (e.g., MSW, nock), minimal mocking elsewhere
+- **Behavior-first testing** — blackbox tests following codebase conventions, minimal mocking
 
 ## Installation
 
@@ -112,7 +112,7 @@ npm test && npm run build && npm run lint
 | `forge-requirement-analysis` | 1 | Extracts complete feature specs from `docs/context/` files. Focuses on *what*, not *how*. Produces `REQUIREMENTS.md` |
 | `forge-design-creation` | 2 | Creates technical design with public contracts, wire formats, sequence diagrams, and test matrix from requirements |
 | `forge-implementation-planning` | 4 | Converts design into implementation units with detailed pseudocode. Analyzes codebase conventions first. No real code |
-| `forge-test-planning` | 6 | Builds exhaustive test plan from impl plan. Unit tests + flow tests (pseudo-E2E with HTTP mocking). No real test code |
+| `forge-test-planning` | 6 | Builds exhaustive test plan from impl plan. Analyzes codebase test conventions first, then plans unit + flow tests. No real test code |
 | `forge-code-review` | 3, 5, 7, 9, 11 | Systematic review with severity-ranked findings (Critical/Major/Minor/Suggestion). Works on any artifact type |
 | `forge-documentation` | 12 | Creates docstrings, examples, README updates, and a `[FEATURE]-CONTEXT.md` for future reference |
 

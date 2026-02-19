@@ -55,8 +55,8 @@
 ### Quality
 - [ ] Tests are behavior-focused (blackbox), not implementation-focused
 - [ ] Assertions are precise (exact expected values)
-- [ ] HTTP mocking library used for network calls, minimal other mocks
-- [ ] Follows codebase test patterns
+- [ ] Mocking strategy follows codebase conventions (not invented from scratch)
+- [ ] Follows codebase test patterns (framework, naming, structure)
 
 ### Completeness
 - [ ] Coverage mapping shows all requirements tested

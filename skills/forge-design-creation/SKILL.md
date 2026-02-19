@@ -39,7 +39,7 @@ FORGE :: DESIGN CREATION
 6. **Document Wire Formats:** All network calls across all hops (request/response shapes)
 7. **Create Test Matrix:**
    - Unit tests per component/function
-   - Flow tests (pseudo-e2e with HTTP mocking)
+   - Integration/flow tests (pseudo-e2e, blackbox)
    - Edge cases
 8. **Document Design Decisions:** Significant decisions with context, options, and rationale
 9. **Ask Clarifying Questions:** If design reveals requirement ambiguities
