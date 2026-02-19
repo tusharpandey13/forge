@@ -55,7 +55,7 @@
 ### Quality
 - [ ] Tests are behavior-focused (blackbox), not implementation-focused
 - [ ] Assertions are precise (exact expected values)
-- [ ] MSW used for HTTP mocking, minimal other mocks
+- [ ] HTTP mocking library used for network calls, minimal other mocks
 - [ ] Follows codebase test patterns
 
 ### Completeness
@@ -70,7 +70,7 @@
 ### Correctness
 - [ ] Implementation matches IMPL-PLAN pseudocode
 - [ ] Implementation matches TEST-PLAN test cases
-- [ ] Quality gate passes: `pnpm test:coverage && pnpm prepack && pnpm lint:fix`
+- [ ] Quality gate passes (tests, build, lint — per project toolchain)
 - [ ] No regressions in existing tests
 
 ### Quality

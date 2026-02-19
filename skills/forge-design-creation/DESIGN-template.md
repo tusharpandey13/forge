@@ -133,9 +133,9 @@ flowchart LR
 | UT-1 | [component] | Happy path description | [input] | [expected] | P0 |
 | UT-2 | [component] | Error case description | [input] | [error] | P0 |
 
-### Flow Tests (Pseudo-E2E with MSW)
+### Flow Tests (Pseudo-E2E with HTTP Mocking)
 
-| ID | Flow | Steps | HTTP Mocks (MSW) | Assertions | Priority |
+| ID | Flow | Steps | HTTP Mocks | Assertions | Priority |
 |----|------|-------|------------------|------------|----------|
 | FT-1 | [flow name] | 1. action 2. action | POST /api → 200 | [assertions] | P0 |
 

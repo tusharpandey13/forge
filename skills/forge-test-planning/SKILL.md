@@ -5,7 +5,7 @@ description: Create test plan from implementation plan. Use when planning tests,
 
 # Test Planning
 
-Create exhaustive test plan from implementation plan and design test matrix. Uses MSW for HTTP mocking. NO actual test code—only pseudocode.
+Create exhaustive test plan from implementation plan and design test matrix. Uses HTTP mocking (e.g., MSW, nock) for network isolation. NO actual test code—only pseudocode.
 
 ## When to Use
 
@@ -36,7 +36,7 @@ FORGE :: TEST PLANNING
    - Mock only external dependencies
 5. **Plan Flow Tests (Pseudo-E2E):**
    - Call real public methods (blackbox approach)
-   - Use MSW for HTTP layer mocking ONLY
+   - Use HTTP mocking library (e.g., MSW, nock) for network layer ONLY
    - Test complete user flows
    - Minimize other mocks
 6. **Write Test Pseudocode:** Detailed setup, execution, and assertions for each test
@@ -47,7 +47,7 @@ FORGE :: TEST PLANNING
 | Type | Approach |
 |------|----------|
 | **Unit Tests** | Isolate single function/method, fast, deterministic, mock only external dependencies |
-| **Flow Tests** | Call real public methods, MSW for HTTP, blackbox behavior testing, minimal mocks |
+| **Flow Tests** | Call real public methods, HTTP mocking for network calls, blackbox behavior testing, minimal mocks |
 
 ## Deliverables
 
@@ -59,7 +59,7 @@ FORGE :: TEST PLANNING
 - [ ] All functional requirements verified by tests
 - [ ] All error paths are tested
 - [ ] All edge cases from requirements are covered
-- [ ] MSW used for HTTP mocking only (minimal other mocks)
+- [ ] HTTP mocking used for network calls only (minimal other mocks)
 - [ ] Assertions have precise expected values
 - [ ] Follows existing test patterns in codebase
 - [ ] Flow tests are blackbox (test behavior, not implementation)
@@ -67,7 +67,7 @@ FORGE :: TEST PLANNING
 ## Anti-Patterns
 
 - Do NOT write actual test code
-- Do NOT over-mock (only HTTP via MSW, avoid mocking internal modules)
+- Do NOT over-mock (only HTTP via mocking library, avoid mocking internal modules)
 - Do NOT test implementation details (test observable behavior)
 
 ## Handoff

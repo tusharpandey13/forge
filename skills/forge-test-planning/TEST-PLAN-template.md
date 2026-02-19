@@ -137,7 +137,7 @@ EXPECT result TO_EQUAL defaultValue
 
 **Description:** End-to-end flow for [user scenario]
 
-**MSW Handlers:**
+**HTTP Mock Handlers:**
 ```
 HANDLER POST /api/resource:
     IF request.body.action == "create":
@@ -165,7 +165,7 @@ HANDLER PUT /api/resource/:id:
 
 **Setup:**
 ```
-START MSW server with handlers
+START mock server with handlers
 CREATE client = new FeatureClient(config)
 ```
 
@@ -195,9 +195,9 @@ EXPECT updateResult.status TO_EQUAL "updated"
 
 EXPECT finalResult.details TO_MATCH { newData properties }
 
-EXPECT MSW POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 1
-EXPECT MSW GET /api/resource/:id TO_HAVE_BEEN_CALLED_TIMES 2
-EXPECT MSW PUT /api/resource/:id TO_HAVE_BEEN_CALLED_TIMES 1
+EXPECT mock POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 1
+EXPECT mock GET /api/resource/:id TO_HAVE_BEEN_CALLED_TIMES 2
+EXPECT mock PUT /api/resource/:id TO_HAVE_BEEN_CALLED_TIMES 1
 ```
 
 ---
@@ -206,7 +206,7 @@ EXPECT MSW PUT /api/resource/:id TO_HAVE_BEEN_CALLED_TIMES 1
 
 **Description:** Verifies recovery when [error condition occurs]
 
-**MSW Handlers:**
+**HTTP Mock Handlers:**
 ```
 LET callCount = 0
 
@@ -226,7 +226,7 @@ result = CALL client.createWithRetry({ data: inputData })
 **Assertions:**
 ```
 EXPECT result.status TO_EQUAL "created"
-EXPECT MSW POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 3
+EXPECT mock POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 3
 ```
 
 ---
@@ -305,7 +305,7 @@ EXPECT MSW POST /api/resource TO_HAVE_BEEN_CALLED_TIMES 3
 
 | Dependency | Mock Type | Reason |
 |------------|-----------|--------|
-| HTTP APIs | MSW | Standard for network isolation |
+| HTTP APIs | HTTP mocking library (e.g., MSW, nock) | Standard for network isolation |
 | Date/Time | jest.useFakeTimers | Deterministic time-based tests |
 | Random | jest.spyOn | Deterministic random values |
 

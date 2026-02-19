@@ -119,7 +119,8 @@ Start a **new conversation** between major phases to avoid context window bloat:
 Run after implementation phases (8 and 10):
 
 ```bash
-pnpm run test:coverage && pnpm run prepack && pnpm run lint:fix
+# Adapt to your project's toolchain, e.g.:
+npm test && npm run build && npm run lint
 ```
 
 ## Forge Skills

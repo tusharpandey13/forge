@@ -11,7 +11,7 @@ LLM-assisted coding works best with clear boundaries. Without structure, context
 - **Artifacts over conversation** — every phase writes a document, not just chat
 - **Review gates** — no phase proceeds without explicit review
 - **Fresh context** — start new conversations between major phases to avoid context degradation
-- **Behavior-first testing** — blackbox tests with MSW for HTTP, minimal mocking elsewhere
+- **Behavior-first testing** — blackbox tests with HTTP mocking (e.g., MSW, nock), minimal mocking elsewhere
 
 ## Installation
 
@@ -97,10 +97,10 @@ Start a **new conversation** between major phases to keep context windows focuse
 Run after implementation phases (8 and 10):
 
 ```bash
-pnpm run test:coverage && pnpm run prepack && pnpm run lint:fix
+# Adapt to your project's toolchain, e.g.:
+npm test && npm run build && npm run lint
+# or: pnpm run test:coverage && pnpm run prepack && pnpm run lint:fix
 ```
-
-Adapt this command to your project's toolchain.
 
 ## Skills Reference
 
@@ -112,41 +112,9 @@ Adapt this command to your project's toolchain.
 | `forge-requirement-analysis` | 1 | Extracts complete feature specs from `docs/context/` files. Focuses on *what*, not *how*. Produces `REQUIREMENTS.md` |
 | `forge-design-creation` | 2 | Creates technical design with public contracts, wire formats, sequence diagrams, and test matrix from requirements |
 | `forge-implementation-planning` | 4 | Converts design into implementation units with detailed pseudocode. Analyzes codebase conventions first. No real code |
-| `forge-test-planning` | 6 | Builds exhaustive test plan from impl plan. Unit tests + flow tests (pseudo-E2E with MSW). No real test code |
+| `forge-test-planning` | 6 | Builds exhaustive test plan from impl plan. Unit tests + flow tests (pseudo-E2E with HTTP mocking). No real test code |
 | `forge-code-review` | 3, 5, 7, 9, 11 | Systematic review with severity-ranked findings (Critical/Major/Minor/Suggestion). Works on any artifact type |
 | `forge-documentation` | 12 | Creates docstrings, examples, README updates, and a `[FEATURE]-CONTEXT.md` for future reference |
-
-### POC Workflow Skills
-
-Pre-forge skills for iterative POC development. These fill the gap between exploratory coding and the production forge workflow — providing structured debug loops, session journaling, and context persistence.
-
-```
-POC Workflow                              Forge Workflow
-─────────────                             ──────────────
-/poc-debug     → Debug + observe    ─┐
-/poc-status    → State summary       ├──→  /forge (phases 1-12)
-/poc-checkpoint → Git checkpoint    ─┘
-```
-
-| Skill | Purpose |
-|-------|---------|
-| `poc-debug` | Unified debug intake + observation recording. Auto-reads SDK logs (`.logs/sdk.jsonl`), correlates with errors, applies fixes, and journals to `docs/poc/DEV-LOG.md` |
-| `poc-status` | Read-only POC state summary. Shows requirement coverage (pass/wip/fail/untested), active blockers, and suggested next steps |
-| `poc-checkpoint` | Creates git commits with structured messages derived from DEV-LOG session context (what was proven, what remains, blockers) |
-
-**Workspace setup for POC skills:**
-
-```
-project/
-├── docs/
-│   ├── poc/
-│   │   └── DEV-LOG.md           # Session journal (created by poc-debug)
-│   └── requirement/
-│       └── REQUIREMENTS.md      # Requirement coverage source
-├── .logs/
-│   └── sdk.jsonl                # SDK instrumentation output (gitignored)
-└── [source code]
-```
 
 ### Bonus Skill
 
