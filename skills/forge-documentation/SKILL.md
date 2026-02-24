@@ -1,50 +1,56 @@
 ---
 name: forge-documentation
-description: Create documentation after implementation. Use when documenting features, adding docstrings, updating README, or creating context files.
+description: Create documentation after implementation and reviews are complete. Use when documenting features, adding docstrings, updating README, or creating context files.
 ---
 
 # Documentation
 
-Create documentation artifacts after implementation is complete: docstrings, examples, and context files.
+Create documentation artifacts after implementation and reviews are complete: docstrings, examples, and context files.
 
 ## When to Use
 
 - User asks to document a feature
-- User asks to add docs or update documentation
-- Implementation phase is complete
+- Phase 12 of the forge workflow (after test review approved)
+- All implementation and review phases are complete
 
 ## Context Sources
 
+- `.forge/FORGE-CONFIG.md` — conventions, paths
+- `.forge/FORGE-LOGS.md` — full feature history
 - Implemented source files
-- `docs/plan/IMPL-PLAN.md`
-- `docs/design/DESIGN.md`
-- `docs/requirement/REQUIREMENTS.md`
-- Existing documentation (README.md, EXAMPLES.md)
+- `{plan-dir}/IMPL-PLAN.md`
+- `{design-dir}/DESIGN.md`
+- `{requirements-dir}/REQUIREMENTS.md`
+- Existing documentation (README.md, etc.)
+
+## Process
 
 **MANDATORY FIRST OUTPUT:**
 ```
 FORGE :: DOCUMENTATION
 ```
 
-## Documentation Types
+### 1. Verify Prerequisites
 
-### 1. Inline Documentation
+Read FORGE-LOGS.md. Confirm Phase 11 (Test Review) status is `approved`.
 
-**Docstrings (JSDoc/TSDoc):**
+### 2. Inline Documentation
+
+Add docstrings to all public APIs following project conventions:
 - All public functions and methods
 - All public classes
 - All public types and interfaces
-- Include parameters, return types, thrown errors, and examples
+- Include parameters, return types, thrown errors, and usage examples
 
-**Inline Comments:**
-- Complex algorithms that need explanation
+Add inline comments for:
+- Complex algorithms
 - Non-obvious business logic
-- Workarounds with context (why it exists)
+- Workarounds (with context on why)
 - Performance-critical sections
 
-### 2. EXAMPLES.md
+### 3. EXAMPLES.md
 
-Add intuitive prose describing the feature:
+Create or update examples documentation:
 
 ```markdown
 # [Feature Name]
@@ -63,83 +69,92 @@ Add intuitive prose describing the feature:
 
 ## Error Handling
 [How to handle errors]
-
-## Best Practices
-[Recommendations]
 ```
 
-### 3. README.md Updates
+### 4. README.md Updates
 
-Update when there are:
-- New public APIs
-- New configuration options
-- New dependencies
-- Breaking changes
+Update if there are new public APIs, configuration options, dependencies, or breaking changes.
 
-Sections to check:
-- Installation
-- Quick Start
-- API Reference
-- Configuration
-- Changelog pointer
+### 5. [FEATURE]-CONTEXT.md
 
-### 4. [FEATURE]-CONTEXT.md
-
-Implementation context for future agents and developers.
-
-**Location:** `docs/[FEATURE]-CONTEXT.md`
+Create implementation context for future developers and agents:
 
 ```markdown
 # [Feature] Implementation Context
 
 ## Feature Summary
-[Brief description of what was implemented]
+[Brief description]
 
 ## Key Files
-| File | Purpose |
-|------|---------|
-| [path] | [what it does] |
+- [path]: [purpose]
+- [path]: [purpose]
 
 ## Architecture Decisions
-[Why things are the way they are]
+[Key DDs and rationale — reference design-artifact files]
 
 ## Known Limitations
-[Current constraints and why they exist]
+[Current constraints and why]
 
 ## Extension Points
-[How to extend this feature in the future]
-
-## Related Features
-[Connections to other parts of the system]
+[How to extend this feature]
 
 ## Testing Notes
 [How to test, special considerations]
 
 ## Debugging Tips
-[How to troubleshoot common issues]
-
-## Historical Context
-[Why certain decisions were made, alternatives considered]
+[Common issues and troubleshooting]
 
 ## References
-| Doc | Location |
-|-----|----------|
-| Requirements | docs/requirement/REQUIREMENTS.md |
-| Design | docs/design/DESIGN.md |
-| Impl Plan | docs/plan/IMPL-PLAN.md |
+- Requirements: [path]
+- Design: [path]
+- Impl Plan: [path]
+- Test Plan: [path]
 ```
 
-## Quality Checks
+Location: `{artifact-dir}/[FEATURE]-CONTEXT.md`
 
-- [ ] All public APIs have docstrings
-- [ ] Complex logic has inline comments
-- [ ] EXAMPLES.md has runnable examples
-- [ ] README.md is accurate and up-to-date
-- [ ] [FEATURE]-CONTEXT.md is complete for future reference
-- [ ] No outdated documentation remains
+### 6. Self-Validate
+
+Re-read output. Verify:
+- All public APIs have docstrings
+- CONTEXT.md references are valid paths
+- No placeholder text remains
+Fix any issues silently.
+
+### 7. Update State
+
+Update FORGE-LOGS.md:
+```markdown
+### Phase 12: Documentation — completed
+- Started: [timestamp]
+- Completed: [timestamp]
+- Artifacts:
+  - [FEATURE]-CONTEXT.md
+  - EXAMPLES.md (created/updated)
+  - README.md (updated: [sections])
+  - Docstrings added to [count] files
+- Commit: [SHA]
+- Feature status: COMPLETE
+```
+
+Update FORGE-LOGS.md `## Current` section:
+```
+Phase 12: Documentation — completed (Feature Complete)
+```
+
+Commit:
+```bash
+git -C .forge add -A && git -C .forge commit -m "forge: phase 12 — documentation complete, feature done"
+```
+
+## Anti-Patterns
+
+- Do NOT create documentation before implementation is complete and reviewed
+- Do NOT add docstrings to internal/private APIs unless they're complex
+- Do NOT duplicate information already in DESIGN.md — reference it
 
 ## Handoff
 
-**Output:** Updated documentation files
+**Output:** Updated documentation files + FORGE-LOGS.md
 
 **Feature complete.**

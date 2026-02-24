@@ -2,54 +2,45 @@
 
 ## Overview
 
-Testing strategy and comprehensive test cases for the feature.
+Testing strategy and comprehensive test cases.
 
 ## References
 
-- Implementation Plan: `docs/plan/IMPL-PLAN.md`
-- Design (Test Matrix): `docs/design/DESIGN.md`
-- Requirements: `docs/requirement/REQUIREMENTS.md`
+- Implementation Plan: `[path]/IMPL-PLAN.md`
+- Design (Test Matrix): `[path]/DESIGN.md`
+- Requirements: `[path]/REQUIREMENTS.md`
 
-## Test Conventions (from Codebase Analysis)
+## Test Conventions (from Codebase)
 
-Analyze existing test files in the codebase and document discovered conventions here. This table drives all test planning decisions.
+Discovered from existing test files. This drives all test planning.
 
-| Aspect | Convention | Example Location |
-|--------|------------|------------------|
-| Framework | [jest/vitest/mocha/pytest/go test/...] | [path/to/example.test.ts] |
-| File naming | [*.test.ts / *.spec.ts / *_test.go / ...] | [path/to/example] |
-| Directory structure | [co-located / __tests__ / test/ / ...] | [path/to/example] |
-| Test grouping | [describe/it / test() / func Test* / ...] | [example] |
-| Mocking approach | [what library, what gets mocked, setup pattern] | [example] |
-| Setup/teardown | [beforeEach/afterEach / setUp/tearDown / ...] | [example] |
-| Assertions | [expect / assert / require / ...] | [example] |
-| Fixtures/factories | [pattern if any] | [path/to/fixtures] |
+- Framework: [framework] (e.g., `[path/to/example]`)
+- File naming: [pattern] (e.g., `[path/to/example]`)
+- Directory structure: [co-located / __tests__ / test/] (e.g., `[path]`)
+- Test grouping: [describe/it / test() / func Test*] (e.g., `[example]`)
+- Mocking approach: [library, what gets mocked, setup pattern] (e.g., `[path]`)
+- Setup/teardown: [pattern] (e.g., `[path]`)
+- Assertions: [library/style] (e.g., `[example]`)
+- Fixtures/factories: [pattern if any] (e.g., `[path]`)
 
 ## Mocking Strategy (from Codebase)
 
-Document the mocking conventions discovered from existing tests. Do NOT invent a mocking strategy — follow what the codebase already does.
+Only mock at boundaries the codebase already mocks. Do NOT invent a mocking strategy.
 
-| What is Mocked | How | Library/Pattern | Example Location |
-|----------------|-----|-----------------|------------------|
-| [e.g., HTTP calls] | [e.g., interceptor, test server, DI] | [e.g., MSW, nock, httptest, unittest.mock] | [path/to/example] |
-| [e.g., database] | [e.g., in-memory, test container, mock] | [library] | [path/to/example] |
-| [e.g., time] | [e.g., fake timers, clock] | [library] | [path/to/example] |
-
-**Mocking principle:** Only mock at the boundaries the codebase already mocks. Avoid mocking internal modules.
+- [what is mocked]: [how] using [library] (e.g., `[path/to/example]`)
+- [what is mocked]: [how] using [library] (e.g., `[path/to/example]`)
 
 ## Updated Test Matrix
 
-### Original Matrix (from DESIGN.md)
+### From DESIGN.md (baseline)
 
-| ID | Type | Test Case | Priority |
-|----|------|-----------|----------|
-| [from design] | UT/FT | [case] | P0/P1/P2 |
+- [ID] ([UT/FT]): [case] (P0/P1/P2)
+- [ID] ([UT/FT]): [case] (P0/P1/P2)
 
-### Additions from Implementation Plan
+### Additions from IMPL-PLAN.md
 
-| ID | Source | Test Case | Reason Added |
-|----|--------|-----------|--------------|
-| [new id] | IMPL-PLAN Unit X | [new case] | [why implementation revealed this need] |
+- [ID] (from Unit X): [case] — [why implementation revealed this]
+- [ID] (from Unit X): [case] — [why implementation revealed this]
 
 ---
 
@@ -57,168 +48,108 @@ Document the mocking conventions discovered from existing tests. Do NOT invent a
 
 ### Suite: [Component/Function Name]
 
-**File:** `[path/to/component.test.ts]`
+**File:** `[path/to/component.test.*]`
+**Target:** `[path/to/component.*]`
 
-**Target:** `[path/to/component.ts]`
+#### UT-1: [Test Name — Happy Path]
 
-#### UT-1: [Test Name - Happy Path]
-
-**Description:** Verifies [what behavior is being tested]
+**Description:** Verifies [behavior]
 
 **Setup:**
 ```
 [Follow codebase setup conventions]
 CREATE input = { field: "validValue", count: 5 }
-MOCK [external dependency] using [codebase mocking pattern]
+MOCK [dependency] using [codebase pattern]
 ```
 
-**Execution:**
+**Execute:**
 ```
 result = CALL targetFunction(input)
 ```
 
-**Assertions:**
+**Assert:**
 ```
-EXPECT result.status TO_EQUAL "success"
-EXPECT result.items TO_HAVE_LENGTH 5
-EXPECT [mock] TO_HAVE_BEEN_CALLED_WITH { id: input.field }
-```
-
-**Teardown:**
-```
-[Follow codebase teardown conventions]
+EXPECT result.status EQUALS "success"
+EXPECT result.items HAS_LENGTH 5
+EXPECT [mock] CALLED_WITH { id: input.field }
 ```
 
 ---
 
-#### UT-2: [Test Name - Error Path]
+#### UT-2: [Test Name — Error Path]
 
-**Description:** Verifies error handling when [condition]
+**Description:** Verifies error when [condition]
 
 **Setup:**
 ```
-MOCK [external dependency] to THROW/RETURN error
+MOCK [dependency] to THROW error
 CREATE input = { field: "validValue" }
 ```
 
-**Execution:**
+**Execute:**
 ```
-EXPECT CALL targetFunction(input) TO_THROW [ErrorType]
-```
-
-**Assertions:**
-```
-EXPECT error.message TO_CONTAIN "descriptive message"
-EXPECT error.code TO_EQUAL "ERROR_CODE"
+EXPECT CALL targetFunction(input) THROWS [ErrorType]
 ```
 
----
-
-#### UT-3: [Test Name - Edge Case]
-
-**Description:** Verifies behavior when [edge condition]
-
-**Setup:**
+**Assert:**
 ```
-CREATE input = { field: "", count: 0 }  // empty/zero values
-```
-
-**Execution:**
-```
-result = CALL targetFunction(input)
-```
-
-**Assertions:**
-```
-EXPECT result TO_EQUAL defaultValue
+EXPECT error.message CONTAINS "descriptive message"
+EXPECT error.code EQUALS "ERROR_CODE"
 ```
 
 ---
 
 ### Suite: [Component 2]
 
-**File:** `[path/to/component2.test.ts]`
+**File:** `[path/to/component2.test.*]`
 
 ...
 
 ---
 
-## Integration / Flow Tests
+## Flow Tests
 
 ### Suite: [Feature Flow Name]
 
-**File:** `[path/to/feature.flow.test.ts]`
+**File:** `[path/to/feature.flow.test.*]`
 
-#### FT-1: [Flow Name - Complete Happy Path]
+#### FT-1: [Complete Happy Path]
 
-**Description:** End-to-end flow for [user scenario]
+**Description:** End-to-end flow for [scenario]
 
-**Test Dependencies:**
+**Dependencies:**
 ```
-[Set up mocks/stubs following codebase conventions discovered above]
-[e.g., start test server, configure interceptors, seed test database]
+[Set up mocks/stubs per codebase conventions]
 ```
 
 **Setup:**
 ```
-[Follow codebase setup conventions]
 CREATE client/instance with test configuration
 ```
 
-**Execution:**
+**Execute:**
 ```
-// Step 1: Perform action
+// Step 1
 result1 = CALL client.action1({ data: inputData })
-
-// Step 2: Verify side effect
+// Step 2
 result2 = CALL client.action2(result1.id)
-
-// Step 3: Follow-up action
+// Step 3
 result3 = CALL client.action3(result1.id, { newData })
 ```
 
-**Assertions:**
+**Assert:**
 ```
-EXPECT result1.status TO_EQUAL "created"
-EXPECT result1.id TO_BE_DEFINED
-
-EXPECT result2.status TO_EQUAL "active"
-
-EXPECT result3.status TO_EQUAL "updated"
-```
-
-**Teardown:**
-```
-[Follow codebase teardown conventions]
+EXPECT result1.status EQUALS "created"
+EXPECT result1.id IS_DEFINED
+EXPECT result2.status EQUALS "active"
+EXPECT result3.status EQUALS "updated"
 ```
 
 ---
 
-#### FT-2: [Flow Name - Error Recovery]
+#### FT-2: [Error Recovery Flow]
 
-**Description:** Verifies recovery when [error condition occurs]
-
-**Test Dependencies:**
-```
-[Configure mocks to simulate failure then recovery]
-```
-
-**Execution:**
-```
-result = CALL client.actionWithRetry({ data: inputData })
-```
-
-**Assertions:**
-```
-EXPECT result.status TO_EQUAL "success"
-[Verify retry behavior per codebase conventions]
-```
-
----
-
-#### FT-3: [Flow Name - Partial Failure]
-
-**Description:** Verifies behavior when [partial operation fails]
+**Description:** Verifies recovery when [condition]
 
 ...
 
@@ -229,24 +160,21 @@ EXPECT result.status TO_EQUAL "success"
 ### EC-1: [Edge Case Name]
 
 **Type:** Unit / Flow
-
-**Description:** [What edge case this tests]
-
 **Source:** Requirements EC-X / IMPL-PLAN Unit Y
 
 **Setup:**
 ```
-[specific setup to create edge condition]
+[specific setup for edge condition]
 ```
 
-**Execution:**
+**Execute:**
 ```
-[how to trigger edge case]
+[trigger edge case]
 ```
 
-**Assertions:**
+**Assert:**
 ```
-[expected behavior assertions]
+[expected behavior]
 ```
 
 ---
@@ -255,34 +183,26 @@ EXPECT result.status TO_EQUAL "success"
 
 ### Requirements -> Tests
 
-| Requirement | Test IDs | Coverage Status |
-|-------------|----------|-----------------|
-| FR-1 | UT-1, UT-2, FT-1 | Covered |
-| FR-2 | UT-5, FT-2 | Covered |
-| NFR-1 (performance) | FT-5 | Covered |
-| NFR-2 (security) | UT-10, FT-3 | Covered |
+- FR-1: UT-1, UT-2, FT-1 [covered]
+- FR-2: UT-5, FT-2 [covered]
+- NFR-1 (performance): FT-5 [covered]
+- NFR-2 (security): UT-10, FT-3 [covered]
 
 ### Implementation Units -> Tests
 
-| Impl Unit | Test IDs | Coverage Status |
-|-----------|----------|-----------------|
-| Unit 1 | UT-1, UT-2, UT-3 | Covered |
-| Unit 2 | UT-4, UT-5, UT-6 | Covered |
-| Integration | FT-1, FT-2, FT-3 | Covered |
+- Unit 1: UT-1, UT-2, UT-3 [covered]
+- Unit 2: UT-4, UT-5, UT-6 [covered]
+- Integration: FT-1, FT-2, FT-3 [covered]
 
 ## Test Data
 
 ### Fixtures
 
-| Name | Location | Purpose |
-|------|----------|---------|
-| [fixture name] | [path] | [what it provides] |
+- [name] (`[path]`): [what it provides]
 
 ### Factories
 
-| Name | Purpose | Example Usage |
-|------|---------|---------------|
-| [factory name] | [what it generates] | [usage example] |
+- [name]: [what it generates] — usage: [example]
 
 ---
 

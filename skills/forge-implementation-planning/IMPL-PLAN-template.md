@@ -6,46 +6,46 @@ Brief description of implementation approach.
 
 ## References
 
-- Design Doc: `docs/design/DESIGN.md`
-- Requirements: `docs/requirement/REQUIREMENTS.md`
+- Design: `[path]/DESIGN.md`
+- Requirements: `[path]/REQUIREMENTS.md`
 
 ## Codebase Analysis
 
-### Conventions Identified
+### Conventions
 
-| Aspect | Convention | Example Location |
-|--------|------------|------------------|
-| File naming | [pattern, e.g., kebab-case] | [path/to/example] |
-| Class naming | [pattern, e.g., PascalCase] | [path/to/example] |
-| Function naming | [pattern, e.g., camelCase] | [path/to/example] |
-| Error handling | [pattern, e.g., throw typed errors] | [path/to/example] |
-| Logging | [pattern, e.g., structured logging] | [path/to/example] |
-| Testing | [pattern, e.g., describe/it blocks] | [path/to/example] |
+- File naming: [pattern] (e.g., `[path/to/example]`)
+- Class naming: [pattern] (e.g., `[path/to/example]`)
+- Function naming: [pattern] (e.g., `[path/to/example]`)
+- Error handling: [pattern] (e.g., `[path/to/example]`)
+- Logging: [pattern] (e.g., `[path/to/example]`)
 
 ### Reusable Utilities
 
-| Utility | Location | Purpose |
-|---------|----------|---------|
-| [utility name] | [path] | [what it does, how to use] |
+- [utility name] (`[path]`): [what it does, how to use]
+- [utility name] (`[path]`): [what it does, how to use]
 
 ## Implementation Units
 
-### Order of Implementation
+### Execution Order
 
-1. **[Unit 1 Name]** - Foundation, no dependencies
-2. **[Unit 2 Name]** - Depends on Unit 1
-3. **[Unit 3 Name]** - Depends on Unit 1, 2
-4. ...
+Tier 1 (independent, parallelizable):
+- Unit 1: [Name]
+- Unit 2: [Name]
+
+Tier 2 (depends on Tier 1):
+- Unit 3: [Name] (depends on Unit 1)
+
+Tier 3 (depends on Tier 2):
+- Unit 4: [Name] (depends on Unit 2, Unit 3)
 
 ---
 
 ## Unit 1: [Name]
 
-**File:** `[path/to/file.ts]`
-
-**Type:** New File / Modify Existing
-
-**Depends On:** None / [list units]
+**File:** `[path/to/file]`
+**Type:** New / Modify
+**Tier:** 1 (independent)
+**Depends on:** none
 
 ### Purpose
 
@@ -55,53 +55,43 @@ What this unit does and why it exists.
 
 ```
 FUNCTION functionName(param1: Type, param2: Type) -> ReturnType:
-    // Step 1: Validate inputs
+    // Validate inputs
     IF param1 is null or undefined:
         THROW InvalidArgumentError("param1 is required")
 
-    IF param2 fails validation:
-        THROW ValidationError("param2 must be...")
-
-    // Step 2: Perform main operation
+    // Perform main operation
     intermediateResult = CALL helperFunction(param1)
 
-    // Step 3: Transform result
-    transformedResult = MAP intermediateResult THROUGH transformation
-
-    // Step 4: Handle edge cases
-    IF transformedResult is empty:
+    // Handle edge cases
+    IF intermediateResult is empty:
         RETURN defaultValue
 
-    // Step 5: Return
-    RETURN transformedResult
+    RETURN intermediateResult
 END FUNCTION
 ```
 
 ### Error Handling
 
-| Error Condition | Error Type | Message | Recovery |
-|-----------------|------------|---------|----------|
-| param1 missing | InvalidArgumentError | "param1 is required" | Caller provides param |
-| External API fails | ExternalServiceError | "Service unavailable" | Retry with backoff |
+- param1 missing → InvalidArgumentError ("param1 is required") — caller provides param
+- External API fails → ExternalServiceError ("Service unavailable") — retry with backoff
 
 ### Dependencies
 
-**Imports:**
-- `import { utility } from './utils'`
-- `import { ExternalClient } from 'external-lib'`
+Imports:
+- `utility` from `[path]`
+- `ExternalClient` from `[library]`
 
-**Internal:**
+Internal:
 - Uses Unit X for [purpose]
 
 ---
 
 ## Unit 2: [Name]
 
-**File:** `[path/to/file.ts]`
-
-**Type:** New File / Modify Existing
-
-**Depends On:** Unit 1
+**File:** `[path/to/file]`
+**Type:** New / Modify
+**Tier:** 1 (independent)
+**Depends on:** none
 
 ### Purpose
 
@@ -115,24 +105,16 @@ CLASS ClassName:
     PRIVATE field2: Type
 
     CONSTRUCTOR(config: ConfigType):
-        // Validate configuration
         VALIDATE config has required fields
-
-        // Initialize fields
         SET this.field1 = config.value1
         SET this.field2 = config.value2 OR defaultValue
 
     PUBLIC METHOD methodName(input: InputType) -> OutputType:
-        // Step 1: Description of step
         intermediate = PROCESS input using this.field1
-
-        // Step 2: Description of step
         result = TRANSFORM intermediate
-
         RETURN result
 
     PRIVATE METHOD helperMethod(data: DataType) -> ResultType:
-        // Internal helper logic
         processed = APPLY transformation to data
         RETURN processed
 END CLASS
@@ -140,15 +122,7 @@ END CLASS
 
 ### Error Handling
 
-| Error Condition | Error Type | Message | Recovery |
-|-----------------|------------|---------|----------|
-| [condition] | [type] | [message] | [recovery action] |
-
----
-
-## Unit N: [Name]
-
-...
+- [condition] → [ErrorType] ("[message]") — [recovery]
 
 ---
 
@@ -156,35 +130,25 @@ END CLASS
 
 ### New Constants
 
-| Name | Value | Location | Purpose |
-|------|-------|----------|---------|
-| MAX_RETRY_COUNT | 3 | `src/constants.ts` | Maximum API retry attempts |
-| DEFAULT_TIMEOUT | 5000 | `src/constants.ts` | Default timeout in ms |
+- MAX_RETRY_COUNT = 3 (`[path]`): Maximum API retry attempts
+- DEFAULT_TIMEOUT = 5000 (`[path]`): Default timeout in ms
 
 ### New Configuration Options
 
-| Key | Type | Default | Validation | Purpose |
-|-----|------|---------|------------|---------|
-| configKey | string | "default" | non-empty string | Description |
+- configKey (Type, default: "value", validation: non-empty): [purpose]
 
 ## File Changes Summary
 
-| File | Change Type | Description |
-|------|-------------|-------------|
-| `src/new-file.ts` | New | [what this file contains] |
-| `src/existing.ts` | Modify | [what changes] |
+- `[path/new-file]` (New): [what this file contains]
+- `[path/existing]` (Modify): [what changes]
 
 ## Integration Points
 
-| Component | Integration Method | Notes |
-|-----------|-------------------|-------|
-| [component] | [how it connects] | [any special considerations] |
+- [component]: [how it connects] — [special considerations]
 
 ## Risks & Mitigations
 
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|------------|------------|
-| [risk description] | High/Medium/Low | High/Medium/Low | [how to mitigate] |
+- [risk] (impact: [H/M/L], likelihood: [H/M/L]): mitigation — [how]
 
 ---
 

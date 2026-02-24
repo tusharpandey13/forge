@@ -10,7 +10,8 @@ LLM-assisted coding works best with clear boundaries. Without structure, context
 
 - **Artifacts over conversation** — every phase writes a document, not just chat
 - **Review gates** — no phase proceeds without explicit review
-- **Fresh context** — start new conversations between major phases to avoid context degradation
+- **State tracking** — FORGE-LOGS.md provides full context across conversations
+- **Convention-first** — analyzes your codebase and adapts to existing patterns
 - **Behavior-first testing** — blackbox tests following codebase conventions, minimal mocking
 
 ## Installation
@@ -25,133 +26,117 @@ Claude Code automatically discovers skills in `~/.claude/skills/`. Each subdirec
 
 ## Getting Started
 
-### 1. Prepare your project
+### 1. Initialize
 
-Create the expected directory structure in your project root:
-
-```
-project/
-├── docs/
-│   ├── context/           # Drop PRDs, specs, Confluence exports here
-│   ├── requirement/       # Phase 1 output
-│   ├── design/            # Phase 2 output
-│   ├── plan/              # Phase 4 + 6 output
-│   └── misc/              # Supporting docs
-└── src/
-```
-
-### 2. Add context
-
-Place any external context (PRDs, specs, issue descriptions) as markdown files in `docs/context/`.
-
-### 3. Run the workflow
-
-Invoke the main skill to see the full workflow:
+Run the forge orchestrator in Claude Code:
 
 ```
 /forge
 ```
 
-Or jump directly to a specific phase:
+Forge will:
+- Create `.forge/` directory for internal state (config, logs, git tracking)
+- Detect your codebase conventions (language, framework, naming patterns, test setup)
+- Ask for your input on anything it's unsure about
+- Create a `forge/` directory for artifacts (or adapt to your existing docs directory)
+
+### 2. Add context
+
+Place any external context (PRDs, specs, issue descriptions) as markdown files in `forge/context/`.
+
+### 3. Run the workflow
+
+Say "analyze requirements" to start, or just `/forge` to see what's next at any point.
+
+## Workspace Structure
 
 ```
-"Analyze requirements from docs/context/"
-"Create design from REQUIREMENTS.md"
-"Create implementation plan from DESIGN.md"
+project/
+├── .forge/                  # Internals (auto-managed)
+│   ├── .git/                # Forge git repo (tracks forge artifacts)
+│   ├── FORGE-CONFIG.md      # Detected conventions + user config
+│   └── FORGE-LOGS.md        # State, phase history, artifact registry
+├── forge/                   # Artifacts (user-visible, customizable path)
+│   ├── context/             # User-provided PRDs, specs, issues
+│   ├── requirement/         # Phase 1 output
+│   ├── design/              # Phase 2 output + design decision research
+│   ├── plan/                # Phase 4 + 6 output
+│   └── review/              # Phase 9 + 11 output
+└── src/                     # Your source code (untouched by forge git)
 ```
+
+The artifact directory path is configurable — forge adapts to your project's existing conventions.
 
 ## Workflow
 
-Forge follows a 12-phase loop. Each phase produces a specific artifact, and review phases gate progression.
-
 ```
- Phase    Action                   Output
- ─────    ──────                   ──────
-  1       Requirement Analysis     docs/requirement/REQUIREMENTS.md
-  2       Design Creation          docs/design/DESIGN.md
-  3       Design Review            Feedback → iterate on DESIGN.md
-  4       Implementation Planning  docs/plan/IMPL-PLAN.md
-  5       Impl Plan Review         Feedback → iterate on IMPL-PLAN.md
-  6       Test Planning            docs/plan/TEST-PLAN.md
-  7       Test Plan Review         Feedback → iterate on TEST-PLAN.md
-  8       Code Implementation      Source code + quality gate
-  9       Code Review              Feedback → iterate on code
- 10       Test Implementation      Test code + quality gate
- 11       Test Review              Feedback → iterate on tests
- 12       Documentation            Docs, docstrings, CONTEXT.md
+ Phase    Action                   Skill                          Output
+ -----    ------                   -----                          ------
+  1       Requirement Analysis     forge-requirement-analysis     REQUIREMENTS.md
+  2       Design Creation          forge-design-creation          DESIGN.md + research artifacts
+  3       Design Review            forge-review                   DESIGN-REVIEW-1.md
+  4       Implementation Planning  forge-implementation-planning  IMPL-PLAN.md
+  5       Impl Plan Review         forge-review                   IMPL-PLAN-REVIEW-1.md
+  6       Test Planning            forge-test-planning            TEST-PLAN.md
+  7       Test Plan Review         forge-review                   TEST-PLAN-REVIEW-1.md
+  8       Code Implementation      forge-implement                Source code
+  9       Code Review              forge-review                   CODE-REVIEW-1.md
+ 10       Test Implementation      forge-implement-tests          Test code
+ 11       Test Review              forge-review                   TEST-REVIEW-1.md
+ 12       Documentation            forge-documentation            Docs + CONTEXT.md
 ```
 
-### Context management
+### State Tracking
 
-Start a **new conversation** between major phases to keep context windows focused:
+FORGE-LOGS.md tracks everything:
+- Current phase and status
+- All artifacts with paths and git SHAs
+- Key decisions made at each phase
+- Review rounds and findings
 
-| After Phase | Start New Conversation For |
-|-------------|---------------------------|
-| 1 (Requirements) | Phase 2 (Design) |
-| 2-3 (Design + Review) | Phase 4 (Impl Planning) |
-| 6-7 (Test Plan + Review) | Phase 8 (Code Implementation) |
-| 10-11 (Tests + Review) | Phase 12 (Documentation) |
+Run `/forge` at any point to see where you are and what to do next.
 
-### Quality gate
+### Context Management
 
-Run after implementation phases (8 and 10):
+Start a **new conversation** between major phases to keep context focused. FORGE-LOGS.md provides full continuity.
 
-```bash
-# Adapt to your project's toolchain, e.g.:
-npm test && npm run build && npm run lint
-# or: pnpm run test:coverage && pnpm run prepack && pnpm run lint:fix
-```
+Suggested conversation boundaries:
+- After Phase 1 → new conversation for Phase 2
+- After Phase 3 → new conversation for Phase 4
+- After Phase 7 → new conversation for Phase 8
+- After Phase 11 → new conversation for Phase 12
+
+### Quality Gate
+
+Defined in FORGE-CONFIG.md during setup. Runs automatically after implementation phases (8 and 10).
 
 ## Skills Reference
 
-### Core Workflow Skills
+### Core Skills
 
-| Skill | Phases | Purpose |
-|-------|--------|---------|
-| `forge` | All | Orchestrator — displays the full workflow and guides phase transitions |
-| `forge-requirement-analysis` | 1 | Extracts complete feature specs from `docs/context/` files. Focuses on *what*, not *how*. Produces `REQUIREMENTS.md` |
-| `forge-design-creation` | 2 | Creates technical design with public contracts, wire formats, sequence diagrams, and test matrix from requirements |
-| `forge-implementation-planning` | 4 | Converts design into implementation units with detailed pseudocode. Analyzes codebase conventions first. No real code |
-| `forge-test-planning` | 6 | Builds exhaustive test plan from impl plan. Analyzes codebase test conventions first, then plans unit + flow tests. No real test code |
-| `forge-code-review` | 3, 5, 7, 9, 11 | Systematic review with severity-ranked findings (Critical/Major/Minor/Suggestion). Works on any artifact type |
-| `forge-documentation` | 12 | Creates docstrings, examples, README updates, and a `[FEATURE]-CONTEXT.md` for future reference |
+- **forge** — Active orchestrator. Initializes workspace, detects state, nudges to next step.
+- **forge-requirement-analysis** — Phase 1. Extracts specs from context files. Focuses on *what*, not *how*.
+- **forge-design-creation** — Phase 2. Creates technical design with interactive design decision research.
+- **forge-review** — Phases 3, 5, 7, 9, 11. Systematic review with severity-ranked findings. Produces numbered review artifacts.
+- **forge-implementation-planning** — Phase 4. Converts design to implementation units with pseudocode and parallelism tiers.
+- **forge-test-planning** — Phase 6. Builds test plan from impl plan. Discovers and follows codebase test conventions.
+- **forge-implement** — Phase 8. Translates plan to code. Auto-decides parallelism from dependency graph.
+- **forge-implement-tests** — Phase 10. Translates test plan to test code following codebase conventions.
+- **forge-documentation** — Phase 12. Docstrings, examples, README updates, and CONTEXT.md.
 
-### Bonus Skill
+### Automation
 
-| Skill | Purpose |
-|-------|---------|
-| `quorum` | Multi-expert panel simulation for critical analysis. Assembles 3 domain experts + an adversarial auditor for structured debate and synthesis |
+- **forge-autopilot** — Runs the full forge pipeline with subagents. Minimal human interaction. Gate-based progression with automatic fix cycles.
 
 ## Templates
 
 Each planning skill includes a template for its output artifact:
 
-| Template | Location | Used By |
-|----------|----------|---------|
-| `REQUIREMENTS-template.md` | `skills/forge-requirement-analysis/` | Requirement Analysis |
-| `DESIGN-template.md` | `skills/forge-design-creation/` | Design Creation |
-| `IMPL-PLAN-template.md` | `skills/forge-implementation-planning/` | Implementation Planning |
-| `TEST-PLAN-template.md` | `skills/forge-test-planning/` | Test Planning |
-| `review-checklist.md` | `skills/forge-code-review/` | Code Review (all review phases) |
-
-Templates are picked up automatically by the skills. They define the expected structure for each artifact.
-
-## Phase Commands Quick Reference
-
-| Phase | Command |
-|-------|---------|
-| 1 | `"Analyze requirements from docs/context/"` |
-| 2 | `"Create design from REQUIREMENTS.md"` |
-| 3 | `"Review docs/design/DESIGN.md"` |
-| 4 | `"Create implementation plan from DESIGN.md"` |
-| 5 | `"Review docs/plan/IMPL-PLAN.md"` |
-| 6 | `"Create test plan from IMPL-PLAN.md"` |
-| 7 | `"Review docs/plan/TEST-PLAN.md"` |
-| 8 | `"Implement IMPL-PLAN.md, then run quality gate"` |
-| 9 | `"Review implementation changes"` |
-| 10 | `"Implement TEST-PLAN.md, then run quality gate"` |
-| 11 | `"Review test changes"` |
-| 12 | `"Document the feature"` |
+- `REQUIREMENTS-template.md` in `forge-requirement-analysis/`
+- `DESIGN-template.md` in `forge-design-creation/`
+- `IMPL-PLAN-template.md` in `forge-implementation-planning/`
+- `TEST-PLAN-template.md` in `forge-test-planning/`
+- `review-checklist.md` in `forge-review/`
 
 ## License
 

@@ -6,9 +6,8 @@ Brief description of the feature/change request.
 
 ## Source Context
 
-| Source | Location | Summary |
-|--------|----------|---------|
-| [type] | [path/url] | [brief] |
+- [type]: [path/url] — [brief summary]
+- [type]: [path/url] — [brief summary]
 
 ## Functional Requirements
 
@@ -32,7 +31,7 @@ Brief description of the feature/change request.
 
 ### NFR-1: Performance
 
-- [Specific measurable targets, e.g., "Response time < 200ms for 95th percentile"]
+- [Specific measurable targets, e.g., "Response time < 200ms at 95th percentile"]
 
 ### NFR-2: Security
 
@@ -40,7 +39,7 @@ Brief description of the feature/change request.
 
 ### NFR-3: Compatibility
 
-- [Backward compatibility, API versioning, browser/platform support]
+- [Backward compatibility, API versioning, platform support]
 
 ### NFR-4: Reliability
 
@@ -48,21 +47,18 @@ Brief description of the feature/change request.
 
 ## Constraints
 
-| Constraint | Description | Reason |
-|------------|-------------|--------|
-| [name] | [detail] | [why this constraint exists] |
+- [name]: [detail] — [why this constraint exists]
+- [name]: [detail] — [why this constraint exists]
 
 ## Dependencies
 
-| Dependency | Type | Status | Notes |
-|------------|------|--------|-------|
-| [name] | Internal/External | Available/Pending | [details] |
+- [name] ([internal/external]): [status] — [details]
+- [name] ([internal/external]): [status] — [details]
 
 ## Edge Cases & Boundaries
 
-| Case | Expected Behavior | Notes |
-|------|-------------------|-------|
-| [edge case description] | [how system should behave] | [additional context] |
+- [edge case]: expected behavior — [notes]
+- [edge case]: expected behavior — [notes]
 
 ## Out of Scope
 
@@ -71,21 +67,18 @@ Brief description of the feature/change request.
 
 ## Open Questions
 
-| # | Question | Owner | Status | Resolution |
-|---|----------|-------|--------|------------|
-| 1 | [question] | [who can answer] | Open/Resolved | [answer if resolved] |
+- Q1: [question] — owner: [who], status: [open/resolved], resolution: [if resolved]
+- Q2: [question] — owner: [who], status: [open/resolved], resolution: [if resolved]
 
 ## Glossary
 
-| Term | Definition |
-|------|------------|
-| [domain term] | [definition in context] |
+- [term]: [definition in context]
+- [term]: [definition in context]
 
 ## External References
 
-| Name | URL | Relevance |
-|------|-----|-----------|
-| [name] | [url] | [why relevant to requirements] |
+- [name]: [url] — [relevance]
+- [name]: [url] — [relevance]
 
 ---
 
