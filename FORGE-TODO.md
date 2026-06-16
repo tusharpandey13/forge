@@ -1,0 +1,3 @@
+1. make forge state updates async using task agents
+2. add abilbity for natural-language hooks in forge operations (for doing things on every invcation and other common use case entry points)
+3. i wanna use forge in repos as a live knowledge base. this applies to open-source repos where issues/prs are created, responded to and closed continuously. forge should have capabiloty to internalize all this external context about the repo: issues, releases, PRs, comments automatically so that they can be used in forge processes. this also needs to be reasonably uptodate. how should we approach this problem?

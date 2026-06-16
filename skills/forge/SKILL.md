@@ -1,6 +1,9 @@
 ---
 name: forge
 description: Dispatcher-based orchestrator for forge development workflow. Manages state, dispatches phases to task agents, tracks progress, and handles cascade detection. Use when starting features, checking status, or progressing through phases.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Forge — Orchestrator (Dispatcher Architecture)
@@ -17,11 +20,11 @@ Main orchestrator skill implementing the dispatcher-based workflow. Manages stat
 6. **Cascade Detection:** After artifact changes, invalidate downstream phases (FR-6)
 
 **References:**
-- See [state-schema.md](./state-schema.md) for complete state.json structure
-- See [cascade-detector.md](./cascade-detector.md) for dependency graph and invalidation logic
-- See [git-hardening.md](./git-hardening.md) for defensive git operations
-- See [forge-logs-generator.md](./forge-logs-generator.md) for FORGE-LOGS.md generation
-- See [task-agent-prompt-template.md](./task-agent-prompt-template.md) for prompt construction
+- See [state-schema.md](./references/state-schema.md) for complete state.json structure
+- See [cascade-detector.md](./references/cascade-detector.md) for dependency graph and invalidation logic
+- See [git-hardening.md](./references/git-hardening.md) for defensive git operations
+- See [forge-logs-generator.md](./references/forge-logs-generator.md) for FORGE-LOGS.md generation
+- See [task-agent-prompt-template.md](./references/task-agent-prompt-template.md) for prompt construction
 
 ## When to Use
 
@@ -100,7 +103,7 @@ IF .forge/.git exists:
 5. Run config initialization flow (see **Config Initialization** below)
    - If `.forge/FORGE-CONFIG.md` missing, detect codebase conventions and create it
 
-6. Generate initial FORGE-LOGS.md via [forge-logs-generator.md](./forge-logs-generator.md)
+6. Generate initial FORGE-LOGS.md via [forge-logs-generator.md](./references/forge-logs-generator.md)
 
 7. Commit:
    ```bash
@@ -271,7 +274,7 @@ FUNCTION dispatch_phase(feature_state, phase_number):
         instructions_md: instructions_md,  // Full skill content embedded
         quality_gate: PHASE_QUALITY_GATES[phase_number]
     )
-    // See [task-agent-prompt-template.md](./task-agent-prompt-template.md) for full template
+    // See [task-agent-prompt-template.md](./references/task-agent-prompt-template.md) for full template
 
     // 4. Mark phase as in_progress
     feature_state.phases[phase_number].status = "in_progress"
@@ -786,11 +789,11 @@ All 12 phases in order:
 7. `rollback_to_phase(phase_num)` — On user request
 
 **References (see linked specs):**
-- [state-schema.md](./state-schema.md) — state.json structure
-- [cascade-detector.md](./cascade-detector.md) — dependency graph and cascade rules
-- [git-hardening.md](./git-hardening.md) — defensive git init and rollback
-- [forge-logs-generator.md](./forge-logs-generator.md) — FORGE-LOGS.md generation
-- [task-agent-prompt-template.md](./task-agent-prompt-template.md) — prompt construction
+- [state-schema.md](./references/state-schema.md) — state.json structure
+- [cascade-detector.md](./references/cascade-detector.md) — dependency graph and cascade rules
+- [git-hardening.md](./references/git-hardening.md) — defensive git init and rollback
+- [forge-logs-generator.md](./references/forge-logs-generator.md) — FORGE-LOGS.md generation
+- [task-agent-prompt-template.md](./references/task-agent-prompt-template.md) — prompt construction
 
 ## Implementation Assumptions
 
