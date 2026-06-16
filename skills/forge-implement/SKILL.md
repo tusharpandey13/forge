@@ -97,6 +97,12 @@ After all tiers complete:
    ```
    [quality gate command]
    ```
+   **Apply Proof-of-Work Protocol** (see ../forge/references/verification-protocol.md#protocol-a):
+   - Capture tool version: `which <tool> && <tool> --version`
+   - Extract work_count (files checked, tests run, items analyzed)
+   - If work_count == 0 → gate FAILS, even if exit code is 0
+   - Log evidence in `.phase-8-output.json`
+
 2. If full gate fails:
    - Diagnose which unit(s) caused the failure
    - Fix targeted units
@@ -135,6 +141,9 @@ Write `.phase-8-output.json` sidecar in `{feature_dir}/`:
   },
   "quality_gate": {
     "passed": true,
+    "tool_version": "5.3.2",
+    "work_count": 42,
+    "exit_code": 0,
     "deviations": [
       "Unit 3: used async iterator instead of callback (minor, better fit for existing pattern)"
     ]

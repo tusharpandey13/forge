@@ -81,6 +81,13 @@ For each suite:
    - Execution → real function/method calls
    - Assertions → real assertions using convention library
    - Teardown → real cleanup using convention patterns
+   **Apply Tautology Heuristic** (see ../forge/references/verification-protocol.md#protocol-b):
+   - [ ] Test has at least one assertion
+   - [ ] Assertions are NOT bare constants (expect(true).toBe(true))
+   - [ ] Assertions do NOT test only mock configuration
+   - [ ] Snapshot assertions also have behavioral assertions
+   - [ ] All assertion values are derived from code-under-test execution
+   - Tests failing heuristic must be rewritten before proceeding
 5. Run the test file:
    - Pass → suite done
    - Fail → diagnose: test bug vs. source bug
@@ -96,6 +103,12 @@ After all suites complete:
    ```
    [quality gate command from config]
    ```
+   **Apply Proof-of-Work Protocol** (see ../forge/references/verification-protocol.md#protocol-a):
+   - Capture tool version: `which <tool> && <tool> --version`
+   - Extract work_count (number of tests executed, suite runs, coverage points)
+   - If work_count == 0 (no tests ran) → gate FAILS, even if exit code is 0
+   - Log evidence in `.phase-10-output.json`
+
 2. Verify coverage meets minimum (typically 80%, or as specified in config)
 3. If gate fails:
    - Diagnose: which tests fail? which lint rules break?
@@ -134,8 +147,12 @@ Write `.phase-10-output.json` sidecar in `{feature_dir}/`:
   },
   "quality_gate": {
     "passed": true,
+    "tool_version": "jest@29.5.0",
+    "work_count": 87,
+    "exit_code": 0,
     "test_results": "[passed]/[total]",
     "coverage_percent": [X],
+    "tautology_violations_fixed": ["list if any were found and fixed"],
     "source_bugs_found": ["list if any"]
   }
 }
