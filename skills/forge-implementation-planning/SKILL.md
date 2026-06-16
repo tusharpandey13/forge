@@ -16,9 +16,9 @@ Convert design into detailed implementation plan with pseudocode. NO actual code
 ## Context Sources
 
 - `.forge/FORGE-CONFIG.md` — conventions, paths
-- `.forge/FORGE-LOGS.md` — current state, verify phase 3 approved
-- `{design-dir}/DESIGN.md` — primary input (all contracts must be covered)
-- `{requirements-dir}/REQUIREMENTS.md` — constraints and edge cases
+- `.forge/state.json` — current state, verify phase 3 approved
+- `{feature_dir}/design/DESIGN.md` — primary input (absolute path from orchestrator, all contracts must be covered)
+- `{feature_dir}/requirement/REQUIREMENTS.md` — constraints and edge cases
 - Codebase conventions — analyze existing patterns
 
 ## Process
@@ -30,7 +30,7 @@ FORGE :: IMPLEMENTATION PLANNING
 
 ### 1. Verify Prerequisites
 
-Read FORGE-LOGS.md. Confirm Phase 3 (Design Review) status is `approved`.
+Read .forge/state.json. Confirm Phase 3 (Design Review) status is "approved".
 Read FORGE-CONFIG.md for conventions and paths.
 
 ### 2. Review Design Contracts
@@ -85,25 +85,41 @@ Fix any issues silently.
 
 ### 9. Update State
 
-Update FORGE-LOGS.md:
-```markdown
-### Phase 4: Implementation Planning — completed
-- Started: [timestamp]
-- Completed: [timestamp]
-- Artifact: [path]/IMPL-PLAN.md
-- Units: [count] across [tier count] tiers
-- Parallelizable: [count] independent units
-- Commit: [SHA]
+Write output artifact: `{feature_dir}/plan/IMPL-PLAN.md`
+
+Write `.phase-4-output.json` sidecar in `{feature_dir}/`:
+```json
+{
+  "phase": 4,
+  "status": "completed",
+  "artifacts": [
+    {
+      "path": "{feature_dir}/plan/IMPL-PLAN.md",
+      "sha": "[git SHA]",
+      "size_bytes": [size]
+    }
+  ],
+  "decisions": [
+    "Tier 1: N independent units",
+    "Tier 2: N dependent units"
+  ],
+  "execution_details": {
+    "model": "qc-readonly",
+    "reasoning_lines": [count],
+    "context_usage_percent": [%],
+    "elapsed_seconds": [duration]
+  }
+}
 ```
 
-Commit:
-```bash
-git -C .forge add -A && git -C .forge commit -m "forge: phase 4 — implementation plan complete"
-```
+**Orchestrator updates state.json** (skill does NOT write to state.json directly)
+- Orchestrator reads .phase-4-output.json
+- Orchestrator updates state.json with artifacts
+- Orchestrator commits to .forge git
 
 ## Deliverables
 
-- `{plan-dir}/IMPL-PLAN.md` — use [IMPL-PLAN-template.md](./IMPL-PLAN-template.md)
+- `{feature_dir}/plan/IMPL-PLAN.md` — use [IMPL-PLAN-template.md](./IMPL-PLAN-template.md)
 
 ## Quality Checks
 
@@ -116,15 +132,69 @@ git -C .forge add -A && git -C .forge commit -m "forge: phase 4 — implementati
 - No actual implementation code
 - Dependencies and tiers clearly defined
 
+## Error Handling
+
+### Before Starting
+
+1. **State.json Missing or Invalid:**
+   - If `.forge/state.json` cannot be found or is corrupted
+   - **Action:** ERROR: "state.json missing or corrupted. Run /forge to reinitialize."
+   - **Recovery:** Do not proceed; return error
+
+2. **Prerequisite Phase Not Complete:**
+   - If Phase 3 (Design Review) status is not "approved"
+   - **Action:** ERROR: "Phase 3 (Design Review) must be approved first. Current status: {{ phase_3.status }}"
+   - **Recovery:** Return error; do not start planning
+
+3. **DESIGN.md Missing:**
+   - If design file does not exist
+   - **Action:** ERROR: "DESIGN.md not found at {{ expected_path }}"
+   - **Recovery:** Return error; escalate
+
+4. **Config Not Found:**
+   - If `.forge/FORGE-CONFIG.md` missing
+   - **Action:** WARN: "FORGE-CONFIG.md not found. Will infer conventions from codebase."
+   - **Recovery:** Continue with codebase analysis
+
+### During Execution
+
+5. **Design Contracts Ambiguous:**
+   - If DESIGN.md has unclear contracts or unresolved design decisions
+   - **Action:** WARN: "Some design contracts are unclear: {{ list }}. Proceeding with assumptions documented."
+   - **Recovery:** Document assumptions; flag for design review if needed
+
+6. **Codebase Conventions Inconsistent:**
+   - If file/function naming patterns inconsistent across codebase
+   - **Action:** WARN: "Codebase conventions inconsistent ({{ examples }}). Using primary pattern: {{ pattern }}"
+   - **Recovery:** Continue; document chosen convention in IMPL-PLAN.md
+
+### Before Completing
+
+7. **Output Path Not Writable:**
+   - If `.forge/features/<slug>/plan/` cannot be created or written to
+   - **Action:** ERROR: "Cannot write to {{ output_path }}: {{ reason }}"
+   - **Recovery:** Return error; do not complete
+
+8. **Pseudocode Incomplete or Ambiguous:**
+   - If IMPL-PLAN.md contains `[TBD]`, unspecified error paths, or unclear logic
+   - **Action:** WARN: "Incomplete pseudocode: {{ list }}. Escalating for clarification."
+   - **Recovery:** List specific units; ask for guidance
+
+9. **Circular Dependencies Detected:**
+   - If units have circular dependencies preventing tier ordering
+   - **Action:** ERROR: "Circular dependencies detected in units: {{ cycle }}. Cannot establish execution order."
+   - **Recovery:** Return error; escalate for design review
+
 ## Anti-Patterns
 
 - Do NOT write actual implementation code
 - Do NOT skip codebase convention analysis
 - Do NOT leave pseudocode ambiguous
 - Do NOT create units with multiple responsibilities
+- Do NOT silently fail — report all errors with full context
 
 ## Handoff
 
-**Output:** `{plan-dir}/IMPL-PLAN.md`
+**Output:** `{feature_dir}/plan/IMPL-PLAN.md` + `.phase-4-output.json`
 
 **Next Phase:** forge-review (impl plan review)

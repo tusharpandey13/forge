@@ -16,11 +16,11 @@ Create documentation artifacts after implementation and reviews are complete: do
 ## Context Sources
 
 - `.forge/FORGE-CONFIG.md` — conventions, paths
-- `.forge/FORGE-LOGS.md` — full feature history
+- `.forge/state.json` — full feature history
 - Implemented source files
-- `{plan-dir}/IMPL-PLAN.md`
-- `{design-dir}/DESIGN.md`
-- `{requirements-dir}/REQUIREMENTS.md`
+- `{feature_dir}/plan/IMPL-PLAN.md`
+- `{feature_dir}/design/DESIGN.md`
+- `{feature_dir}/requirement/REQUIREMENTS.md`
 - Existing documentation (README.md, etc.)
 
 ## Process
@@ -32,7 +32,7 @@ FORGE :: DOCUMENTATION
 
 ### 1. Verify Prerequisites
 
-Read FORGE-LOGS.md. Confirm Phase 11 (Test Review) status is `approved`.
+Read .forge/state.json. Confirm Phase 11 (Test Review) status is "approved".
 
 ### 2. Inline Documentation
 
@@ -111,7 +111,7 @@ Create implementation context for future developers and agents:
 - Test Plan: [path]
 ```
 
-Location: `{artifact-dir}/[FEATURE]-CONTEXT.md`
+Location: `{feature_dir}/[FEATURE]-CONTEXT.md`
 
 ### 6. Self-Validate
 
@@ -123,38 +123,113 @@ Fix any issues silently.
 
 ### 7. Update State
 
-Update FORGE-LOGS.md:
-```markdown
-### Phase 12: Documentation — completed
-- Started: [timestamp]
-- Completed: [timestamp]
-- Artifacts:
-  - [FEATURE]-CONTEXT.md
-  - EXAMPLES.md (created/updated)
-  - README.md (updated: [sections])
-  - Docstrings added to [count] files
-- Commit: [SHA]
-- Feature status: COMPLETE
+Write `.phase-12-output.json` sidecar in `{feature_dir}/`:
+```json
+{
+  "phase": 12,
+  "status": "completed",
+  "artifacts": [
+    {
+      "path": "[absolute path to CONTEXT file]",
+      "sha": "[git SHA]",
+      "size_bytes": [size]
+    },
+    {
+      "path": "[absolute path to EXAMPLES file]",
+      "sha": "[git SHA]",
+      "size_bytes": [size]
+    },
+    {
+      "path": "[absolute path to README or updated docs]",
+      "sha": "[git SHA]",
+      "size_bytes": [size]
+    }
+  ],
+  "decisions": [
+    "Documentation complete",
+    "Docstrings added to N files"
+  ],
+  "execution_details": {
+    "model": "qc-readonly",
+    "reasoning_lines": [count],
+    "context_usage_percent": [%],
+    "elapsed_seconds": [duration]
+  }
+}
 ```
 
-Update FORGE-LOGS.md `## Current` section:
-```
-Phase 12: Documentation — completed (Feature Complete)
-```
+**Orchestrator updates state.json** (skill does NOT write to state.json directly)
+- Orchestrator reads .phase-12-output.json
+- Orchestrator updates state.json with artifacts, marks feature as "completed"
+- Orchestrator commits to .forge git
 
-Commit:
-```bash
-git -C .forge add -A && git -C .forge commit -m "forge: phase 12 — documentation complete, feature done"
-```
+## Error Handling
+
+### Before Starting
+
+1. **State.json Missing or Invalid:**
+   - If `.forge/state.json` cannot be found or is corrupted
+   - **Action:** ERROR: "state.json missing or corrupted. Run /forge to reinitialize."
+   - **Recovery:** Do not proceed; return error
+
+2. **Prerequisite Phase Not Complete:**
+   - If Phase 11 (Test Review) status is not "approved"
+   - **Action:** ERROR: "Phase 11 (Test Review) must be approved first. Current status: {{ phase_11.status }}"
+   - **Recovery:** Return error; do not start documentation
+
+3. **Source Code Missing:**
+   - If implemented source files do not exist
+   - **Action:** ERROR: "Source code not found. Cannot create documentation."
+   - **Recovery:** Return error; escalate
+
+4. **Design/Requirements Missing:**
+   - If DESIGN.md or REQUIREMENTS.md do not exist
+   - **Action:** WARN: "Design/Requirements not found. Proceeding with implementation-based documentation."
+   - **Recovery:** Continue without upstream context; flag for manual review
+
+### During Execution
+
+5. **Docstring Conventions Unclear:**
+   - If codebase has inconsistent or unclear docstring patterns
+   - **Action:** WARN: "Docstring conventions inconsistent. Using primary pattern: {{ pattern }}"
+   - **Recovery:** Continue; document chosen convention in CONTEXT.md
+
+6. **API Analysis Incomplete:**
+   - If unable to fully analyze public APIs (complex reflection, dynamic methods)
+   - **Action:** WARN: "Could not fully analyze all public APIs: {{ difficult_items }}. Documenting identified items."
+   - **Recovery:** Continue; flag uncertain items for manual review
+
+### Before Completing
+
+7. **Output Path Not Writable:**
+   - If documentation files cannot be written
+   - **Action:** ERROR: "Cannot write documentation to {{ path }}: {{ reason }}"
+   - **Recovery:** Return error; escalate
+
+8. **Cross-References Invalid:**
+   - If CONTEXT.md references non-existent artifact paths
+   - **Action:** WARN: "Invalid cross-references found: {{ list }}. Updating to valid paths."
+   - **Recovery:** Correct references; flag for manual review
+
+9. **Placeholder Text Remains:**
+   - If documentation contains `[TBD]` or unfinished sections
+   - **Action:** WARN: "Incomplete documentation sections: {{ list }}. Escalating."
+   - **Recovery:** List specific sections; escalate for manual completion
+
+10. **Phase Output File Not Writable:**
+    - If `.phase-12-output.json` cannot be written
+    - **Action:** ERROR: "Cannot write phase output to {{ path }}: {{ reason }}"
+    - **Recovery:** Return error; escalate
 
 ## Anti-Patterns
 
 - Do NOT create documentation before implementation is complete and reviewed
 - Do NOT add docstrings to internal/private APIs unless they're complex
 - Do NOT duplicate information already in DESIGN.md — reference it
+- Do NOT silently fail — report all errors with full context
 
 ## Handoff
 
-**Output:** Updated documentation files + FORGE-LOGS.md
+**Output:** Updated documentation files + `.phase-12-output.json`
 
 **Feature complete.**

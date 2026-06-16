@@ -16,9 +16,9 @@ Translates implementation plan pseudocode into production code. Manages unit exe
 ## Context Sources
 
 - `.forge/FORGE-CONFIG.md` — conventions, quality gate command, paths
-- `.forge/FORGE-LOGS.md` — current state, verify phase 7 approved
-- `{plan-dir}/IMPL-PLAN.md` — primary input (pseudocode units)
-- `{design-dir}/DESIGN.md` — contracts and wire formats for reference
+- `.forge/state.json` — current state, verify phase 7 approved
+- `{feature_dir}/plan/IMPL-PLAN.md` — primary input (absolute path from orchestrator, pseudocode units)
+- `{feature_dir}/design/DESIGN.md` — contracts and wire formats for reference
 - Codebase source files — for integration points
 
 ## Process
@@ -30,8 +30,8 @@ FORGE :: IMPLEMENT
 
 ### 1. Verify Prerequisites
 
-Read FORGE-LOGS.md. Confirm:
-- Phase 7 (Test Plan Review) status is `approved`
+Read .forge/state.json. Confirm:
+- Phase 7 (Test Plan Review) status is "approved"
 - IMPL-PLAN.md exists and is approved
 
 If not met → stop and nudge user to complete prior phases.
@@ -103,23 +103,46 @@ After all tiers complete:
 
 ### 6. Update State
 
-Update FORGE-LOGS.md:
-```markdown
-### Phase 8: Code Implementation — completed
-- Started: [timestamp]
-- Completed: [timestamp]
-- Execution strategy: [N] tiers, [parallel/sequential]
-- Units completed: [N]/[total]
-- Deviations:
-  - Unit 3: used async iterator instead of callback (minor, better fit for existing pattern)
-- Quality gate: passed
-- Commit: [SHA]
+Write `.phase-8-output.json` sidecar in `{feature_dir}/`:
+```json
+{
+  "phase": 8,
+  "status": "completed",
+  "artifacts": [
+    {
+      "path": "[absolute path to implemented source file 1]",
+      "sha": "[git SHA]",
+      "size_bytes": [size]
+    },
+    {
+      "path": "[absolute path to implemented source file 2]",
+      "sha": "[git SHA]",
+      "size_bytes": [size]
+    }
+  ],
+  "decisions": [
+    "Execution: N tiers, parallel/sequential",
+    "Units completed: N/total"
+  ],
+  "execution_details": {
+    "model": "qc-readonly",
+    "reasoning_lines": [count],
+    "context_usage_percent": [%],
+    "elapsed_seconds": [duration]
+  },
+  "quality_gate": {
+    "passed": true,
+    "deviations": [
+      "Unit 3: used async iterator instead of callback (minor, better fit for existing pattern)"
+    ]
+  }
+}
 ```
 
-Commit forge artifacts:
-```bash
-git -C .forge add -A && git -C .forge commit -m "forge: phase 8 — code implementation complete"
-```
+**Orchestrator updates state.json** (skill does NOT write to state.json directly)
+- Orchestrator reads .phase-8-output.json
+- Orchestrator updates state.json with artifacts and quality gate result
+- Orchestrator commits to .forge git
 
 ## Deviation Report
 
@@ -140,6 +163,69 @@ When running under forge-autopilot with subagents:
 - Local gate failures in one subagent don't block others
 - After all subagents in a tier complete, run integration check before proceeding to next tier
 
+## Error Handling
+
+### Before Starting
+
+1. **State.json Missing or Invalid:**
+   - If `.forge/state.json` cannot be found or is corrupted
+   - **Action:** ERROR: "state.json missing or corrupted. Run /forge to reinitialize."
+   - **Recovery:** Do not proceed; return error
+
+2. **Prerequisite Phase Not Complete:**
+   - If Phase 7 (Test Plan Review) status is not "approved"
+   - **Action:** ERROR: "Phase 7 (Test Plan Review) must be approved first. Current status: {{ phase_7.status }}"
+   - **Recovery:** Return error; do not start implementation
+
+3. **IMPL-PLAN.md Missing:**
+   - If implementation plan file does not exist
+   - **Action:** ERROR: "IMPL-PLAN.md not found at {{ expected_path }}"
+   - **Recovery:** Return error; escalate
+
+4. **Config Not Found:**
+   - If `.forge/FORGE-CONFIG.md` missing
+   - **Action:** ERROR: "FORGE-CONFIG.md missing. Cannot determine conventions, quality gate command, or output paths."
+   - **Recovery:** Return error; escalate
+
+### During Execution
+
+5. **Quality Gate Command Missing:**
+   - If quality gate command not defined in FORGE-CONFIG.md
+   - **Action:** ERROR: "Quality gate command not found in config. Cannot validate implementation."
+   - **Recovery:** Return error; escalate
+
+6. **Unit Local Quality Gate Fails (Max Retries):**
+   - If a unit fails local quality gate after 2 fix attempts
+   - **Action:** WARN: "Unit {{ unit_name }} failed local quality gate after 2 attempts. Marking as blocked. Reason: {{ reason }}"
+   - **Recovery:** Document; continue to next unit; log in FORGE-LOGS.md
+
+7. **Major Deviation from Plan:**
+   - If implementation significantly deviates from IMPL-PLAN.md (different algorithm, restructured logic)
+   - **Action:** HALT: "Major deviation detected: {{ description }}. Cannot proceed without explicit user approval."
+   - **Recovery:** Report to user with diagnostic details; may require design/plan rollback
+
+8. **Source File Integration Issue:**
+   - If implemented code cannot integrate with existing codebase (missing imports, API mismatch)
+   - **Action:** ERROR: "Integration error: {{ detail }}. Unit {{ unit_name }} cannot be merged."
+   - **Recovery:** Diagnose; attempt fix; if not resolved, escalate
+
+### Before Completing
+
+9. **Output Path Not Writable:**
+   - If source files cannot be written to designated paths
+   - **Action:** ERROR: "Cannot write source file to {{ path }}: {{ reason }}"
+   - **Recovery:** Return error; do not complete
+
+10. **Full Quality Gate Fails (Max Retries):**
+    - If integration check (full quality gate) fails after 2 fix attempts
+    - **Action:** ERROR: "Full quality gate failed after 2 attempts. Build/lint errors: {{ list }}"
+    - **Recovery:** Return error with diagnostic info; escalate for user investigation
+
+11. **Phase Output File Not Writable:**
+    - If `.phase-8-output.json` cannot be written
+    - **Action:** ERROR: "Cannot write phase output to {{ path }}: {{ reason }}"
+    - **Recovery:** Return error; escalate
+
 ## Anti-Patterns
 
 - Do NOT implement without an approved IMPL-PLAN.md
@@ -147,9 +233,10 @@ When running under forge-autopilot with subagents:
 - Do NOT silently deviate from the plan — always document
 - Do NOT continue past a major deviation — halt and escalate
 - Do NOT run the full test suite as part of per-unit gates (too slow, tests may not exist yet)
+- Do NOT silently fail — report all errors with full context
 
 ## Handoff
 
-**Output:** Production source code + FORGE-LOGS.md updated
+**Output:** Production source code + `.phase-8-output.json`
 
 **Next Phase:** forge-review (code review)

@@ -1,177 +1,154 @@
-# Design: [FEATURE NAME]
+# [Feature Name]: Technical Design
 
-## Overview
+[One-paragraph plain-language summary of the capability and what this document covers. Lightly reader-friendly; no marketing.]
 
-Brief description of the solution approach.
+## Section Index
 
-## Requirements Reference
+| Section | Title | Contents |
+|---------|-------|----------|
+| 1 | Architecture | [one line] |
+| 2 | [...] | [one line] |
+| ... | ... | ... |
 
-- Requirements: `[path]/REQUIREMENTS.md`
-- Key FRs: FR-1, FR-2, ...
-- Key NFRs: NFR-1, NFR-2, ...
+---
 
-## Solution Overview
+## 1. Architecture
 
-High-level description of the solution architecture.
+[Short description: max 2 lines.]
 
-```
-[ASCII diagram or description of component interactions]
-```
+| [Dimension] | [Col] | [Col] |
+|-------------|-------|-------|
+| ... | ... | ... |
 
-## Public Contract Changes
+### 1.1 [Subsection]
 
-### Types & Interfaces
+[Short description: max 2 lines.]
 
-```
-// Pseudocode — adapt to project language
-TYPE NewType:
-  field: Type
-  optionalField?: Type
+[Code changes if any, then detail: tables / lists / prose.]
 
-TYPE UnionType = TypeA | TypeB
-```
+---
 
-### Methods & Functions
+## 2. [Major Section]
 
-- `methodName(param: Type) -> ReturnType`
-  - Description: [what it does]
-  - Errors: [ErrorType when condition]
+[Short description: max 2 lines.]
 
-- `anotherMethod(param: Type) -> ReturnType`
-  - Description: [what it does]
-  - Errors: [ErrorType when condition]
+[Section-contents table enumerating subsections. Each row carries an ID; no separate "Section" column. The ID is embedded in the heading as {section}.{ID}.]
 
-### Errors
+| ID | Subject |
+|----|---------|
+| X1 | ... |
 
-- ErrorName (ERROR_CODE): [when thrown] — recovery: [how caller handles]
-- ErrorName (ERROR_CODE): [when thrown] — recovery: [how caller handles]
+### 2.X1 [Subsection]
 
-### Constants & Configuration
+[Heading (with embedded ID), then short description (max 2 lines), then code changes (real target-language code), then detail.]
 
-- CONFIG_KEY (Type, default: "value"): [purpose]
-- CONFIG_KEY (Type, default: "value"): [purpose]
-
-## Internal Implementation
-
-### Component: [Name]
-
-**Responsibility:** [what this component does]
-
-**Approach:**
-1. Step 1 description
-2. Step 2 description
-3. Step 3 description
-
-**Key Decisions:**
-- [decision and rationale]
-
-### Component: [Name 2]
-
-...
-
-## Wire Format Changes
-
-### [Endpoint or Method Name]
-
-**Direction:** Client -> Server / Server -> External
-
-**Request:**
-```
-{
-  "field": "type — description",
-  "nested": {
-    "innerField": "type — description"
-  }
-}
+```typescript
+// real code, not pseudocode
 ```
 
-**Response (Success):**
-```
-{
-  "field": "type — description",
-  "data": {}
-}
-```
+| [enumeration table for the subsection's contents] | | |
+|---|---|---|
 
-**Response (Error):**
-```
-{
-  "error": "error_code",
-  "message": "Human readable message"
-}
-```
+<!--
+AUTHORING RULES (do not emit this comment into the final doc):
+- Stakeholder-facing: SEs, PMs, EMs. Focus on approach and what changes, not code volume.
+- Confident language only. No ambiguity/indecision words (maybe, possibly, TBD, might).
+- No internal scaffolding: no .forge paths, state.json, artifact filenames, ticket IDs,
+  internal initiative/tool/person/codenames, no (LOCKED)/(deferred)/(approved),
+  no inline requirement/decision tags (FR-/NFR-/OQ-/DD-) in prose.
+- Every major section opens with a contents table; every subsection is numbered.
+- Subsection order: heading -> short description (<=2 lines) -> code changes -> detail.
+- Real target-language code (TypeScript here), not pseudocode.
+- All diagrams in mermaid, clean and uncluttered. No ASCII art.
+- Test matrix: tables only (case ID, scenario, expectation). No test code.
+- Section named "Implementation" (not "Internal Approach").
+- Design Decisions ordered by impact, summary table first; optional context subsections.
+- Replace every em dash with a colon. Remove AI-smell phrasing.
+- No self-validation checklist. No document footer / sign-off trailer.
+-->
+
+## [Public Contracts] (example major section)
+
+[Short description.]
+
+| ID | Subject | Package |
+|----|---------|---------|
+| C1 | [type/method/error] | [pkg] |
+
+### 3.C1 [Contract]
+
+[Description, then real code, then a table summarizing fields/methods/behavior.]
+
+## [Network Contracts] (example)
+
+| ID | Endpoint | Used by |
+|----|----------|---------|
+
+### 4.W1 [Endpoint]
+
+[Description, request/response blocks, outcome table.]
+
+## Implementation
+
+[Short description. NOT "Internal Approach".]
+
+| ID | Component | File |
+|----|-----------|------|
+
+### 5.I1 [Component]
+
+[Description, real code changes, then a table of behavior/decisions.]
 
 ## Sequence Diagrams
 
+[Use mermaid; one diagram per interaction; keep them uncluttered. Diagrams may also live inline within the relevant subsection.]
+
 ```mermaid
 sequenceDiagram
-    participant C as Client
-    participant S as Server
-    participant E as External
-
-    C->>S: Request
-    S->>E: External call
-    E-->>S: Response
-    S-->>C: Final response
+    participant A
+    participant B
+    A->>B: request
+    B-->>A: response
 ```
 
 ## Test Matrix
 
-### Unit Tests
+[Tables only. No code.]
 
-- UT-1 ([component]): Happy path — [input] -> [expected] (P0)
-- UT-2 ([component]): Error case — [input] -> [error] (P0)
-- UT-3 ([component]): Edge case — [input] -> [expected] (P1)
+| ID | Component |
+|----|-----------|
+| T1 | ... |
 
-### Flow Tests
+### 6.T1 [Group]
 
-- FT-1 ([flow]): [steps] — asserts: [assertions] (P0)
-- FT-2 ([flow]): [steps] — asserts: [assertions] (P0)
-
-### Edge Cases
-
-- EC-1: [scenario] — expected: [behavior]
-- EC-2: [scenario] — expected: [behavior]
+| Case | Scenario | Expectation |
+|------|----------|-------------|
+| T1.1 | ... | ... |
 
 ## Design Decisions
 
-### DD-1: [Decision Title]
+[Ordered by impact, highest first.]
 
-**Context:** [situation requiring a decision]
+| ID | Decision | Impact |
+|----|----------|--------|
+| D1 | ... | High |
 
-**Options:**
-1. [Option A] — pros: [list], cons: [list]
-2. [Option B] — pros: [list], cons: [list]
+### 7.D1 [Decision]
 
-**Decision:** [chosen option]
+[Short description, then rationale and chosen approach. Optional; the table alone may suffice for low-impact decisions.]
 
-**Rationale:** [why]
+## Security
 
-**Research:** [path to design-artifact file, if applicable]
+| ID | Topic |
+|----|-------|
 
-## Breaking Changes
+### 8.S1 [Topic]
 
-- [change]: impact on [who/what] — migration: [how to migrate]
+[Description and detail.]
 
-## Security Considerations
+## Compatibility
 
-- [aspect 1]
-- [aspect 2]
+[Additive surface, breaking changes if any, forward-compatibility notes. Table of additions.]
 
-## Performance Considerations
-
-- [aspect 1]
-- [aspect 2]
-
-## Appendix
-
-### Related Code
-
-- [path]: [relevance]
-- [path]: [relevance]
-
----
-
-**Created:** [DATE]
-**Last Updated:** [DATE]
-**Status:** Draft / In Review / Approved
+| Addition | Package |
+|----------|---------|

@@ -16,11 +16,14 @@ Solution architect creating technical design from requirements. Produces the blu
 ## Context Sources
 
 - `.forge/FORGE-CONFIG.md` — conventions, paths
-- `.forge/FORGE-LOGS.md` — current state
-- `{requirements-dir}/REQUIREMENTS.md` — primary input
-- `{requirements-dir}/*.md` — supporting requirement docs
+- `.forge/state.json` — current state
+- `{feature_dir}/requirement/REQUIREMENTS.md` — primary input (absolute path from orchestrator)
+  - **Example:** `/Users/alice/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md`
+- `{feature_dir}/requirement/*.md` — supporting requirement docs
 - `{context-dir}/*.md` — original context if needed
 - Codebase architecture patterns and existing implementations
+
+**NOTE:** The `{feature_dir}` variable is resolved by the orchestrator to an absolute path before dispatch. Examples show both variable and concrete forms.
 
 ## Process
 
@@ -31,7 +34,7 @@ FORGE :: DESIGN CREATION
 
 ### 1. Verify Prerequisites
 
-Read FORGE-LOGS.md. Confirm Phase 1 (Requirements) is completed.
+Read .forge/state.json. Confirm Phase 1 (Requirements) status is "completed" or "approved".
 Read FORGE-CONFIG.md for conventions and paths.
 
 ### 2. Review Requirements
@@ -60,7 +63,7 @@ For each design decision with multiple viable options:
    - Optimization potential
    - Tradeoffs and risks
    - Real-world precedent
-3. Each subagent writes findings to: `{design-dir}/design-artifact-{decision-name}.md`
+3. Each subagent writes findings to: `{feature_dir}/design/design-artifact-{decision-name}.md`
 4. Synthesize findings into a comparison
 
 ### 6. Present Design Decisions to User
@@ -74,70 +77,144 @@ DD-1: Authentication Strategy
   Option A: Middleware approach
     - Matches existing codebase pattern
     - Low implementation complexity
-    - Details: forge/design/design-artifact-auth-middleware.md
+    - Details: /Users/alice/project/.forge/features/auth-middleware/design/design-artifact-auth-middleware.md
   Option B: Decorator pattern
     - More flexible for per-route config
     - Medium implementation complexity
-    - Details: forge/design/design-artifact-auth-decorator.md
+    - Details: /Users/alice/project/.forge/features/auth-middleware/design/design-artifact-auth-decorator.md
   Recommendation: Option A
 
 DD-2: Cache Layer
   Option A: Redis with TTL
-    - Details: forge/design/design-artifact-cache-redis.md
+    - Details: /Users/alice/project/.forge/features/auth-middleware/design/design-artifact-cache-redis.md
   Option B: In-memory LRU
-    - Details: forge/design/design-artifact-cache-inmemory.md
+    - Details: /Users/alice/project/.forge/features/auth-middleware/design/design-artifact-cache-inmemory.md
   Recommendation: Option A
 
 Choose for each, or say "go with recommendations."
 ```
 
+**(All paths are absolute, resolved by orchestrator at dispatch time)**
+
 For dependent DDs (DD-3 depends on DD-1 choice): present after the dependency is resolved.
 
 ### 7. Create Design
 
+DESIGN.md is a **stakeholder-facing reference document** read by SEs, PMs, and EMs. It must read as a clean, externally-shareable spec, not an internal work product. Apply all the authoring standards in **§ Authoring Standards** below.
+
 With user's DD choices, create the full design:
 
 1. Define public contracts:
-   - Types and interfaces (pseudocode, language-agnostic)
+   - Types and interfaces (real target-language code, e.g. TypeScript)
    - Methods and functions (signatures, behavior, errors)
    - Error types (codes, conditions, recovery)
    - Constants and configuration options
-2. Specify internal approach (pseudocode, no real code)
+2. Specify the **Implementation** (component behavior + real code changes; focus on what changes and why, not on reproducing every line)
 3. Document wire formats for all network calls
-4. Create test matrix (unit + flow + edge cases)
-5. Document design decisions with rationale and user's choice
-6. Create sequence diagrams (mermaid) for multi-component interactions
+4. Create test matrix (unit + flow + edge cases) as **tables only**: case ID, scenario, expectation. No code.
+5. Document design decisions, **ordered by impact** (highest first), with rationale and the chosen approach
+6. Create sequence diagrams (mermaid) for every multi-component interaction
 
-Output: `{design-dir}/DESIGN.md` using [DESIGN-template.md](./DESIGN-template.md)
+Output: `{feature_dir}/design/DESIGN.md` using [DESIGN-template.md](./DESIGN-template.md)
+- **Variable form:** `{feature_dir}/design/DESIGN.md`
+- **Concrete example:** `/Users/alice/project/.forge/features/auth-middleware/design/DESIGN.md`
 
 ### 8. Self-Validate
 
-Re-read the artifact. Verify:
+Re-read the artifact and silently fix any issues. Verify:
 - No `[placeholder]` or `TBD` text remains
-- All FRs have corresponding solutions
-- Cross-reference IDs (FR-X, DD-X) resolve to defined items
-Fix any issues silently.
+- All requirements have corresponding solutions
+- Cross-reference IDs resolve to defined items
+- Every authoring standard in the section below is satisfied (run the leak scan)
+
+The self-validation is a process step only. **Do NOT write a self-validation checklist, status footer, or any "validated against" metadata into DESIGN.md itself.**
+
+## Authoring Standards (MANDATORY for DESIGN.md)
+
+DESIGN.md is shared with other engineers, PMs, and EMs. It must be clean, confident, and free of internal scaffolding. Apply every rule:
+
+**Audience and tone**
+- Write for SEs/PMs/EMs reading for understanding. Focus on **approach and what is changing**, not on code volume.
+- Prose explaining changes is **purely technical**, not marketing. The opening overview may be lightly framed for readers, but body sections stay factual.
+- Use confident, decided language. **Never imply ambiguity or indecision**: no "maybe", "possibly", "to be decided", "we might", "could potentially", "it is unclear".
+
+**Strip internal scaffolding**
+- Remove all internal references from prose AND code: no `.forge/` paths, `state.json`, `REQUIREMENTS.md`/`PRD`/artifact filenames, Jira/ticket IDs (e.g. `ROAD-####`, `SDK-####`, `SDKREQ-###`), internal initiative names, internal tooling names, individual people's names, or product codenames.
+- Remove internal status markers: no `(LOCKED)`, `(deferred)`, `(approved)`, requirement/decision tags like `FR-1`/`NFR-2`/`OQ-7` in prose. Stakeholders do not need them. Use plain language ("the SDK requires...", not "per FR-1c").
+- Replace internal references in code comments/identifiers with neutral placeholders (e.g. `CLIENT_ID`, "the prior authentication client").
+
+**Structure (every major section)**
+- Every major section opens with a **table enumerating its contents** (e.g. the Public Contracts section lists each contract change as a row; the Implementation section lists each component).
+- Each content row carries a short **ID** (e.g. `C1`, `W1`, `I1`, `T1`, `D1`, `S1`). **Do NOT add a separate "Section" column** that duplicates the ID; instead embed the ID in the subsection heading: `### 3.C1 Error classes`, `### 5.I1 ...`. The `{section-number}.{ID}` form is the reference key.
+- The only table that keeps a plain `Section` column is the top-level **Section Index** at the document start (numbered 1, 2, 3...).
+- Sections that enumerate nothing (e.g. a short Architecture overview) may use plain `N.1` numbering without IDs.
+
+**Every subsection format (in order)**
+1. Heading (numbered)
+2. Short description (max 2 lines)
+3. Code changes (real code)
+4. Further detail: descriptions, tables, lists, prose
+
+**Code**
+- Use **real target-language code** (TypeScript for these SDKs), not pseudocode.
+- Code explanation language is purely technical. Lead with what changed; use tables and progressive disclosure for detail.
+
+**Diagrams**
+- Use **mermaid for all diagrams**. No ASCII line art. Keep diagrams clean and uncluttered (prefer several focused diagrams over one dense one).
+
+**Test matrix**
+- Tables only. Columns: case ID, scenario, expectation. **No test code.**
+
+**Design decisions**
+- Order by impact/importance (highest first). A summary table lists each decision with an impact rating; optional per-decision subsections provide context below the table.
+
+**Formatting hygiene (remove AI-smell)**
+- Replace every em dash (`—`) with a colon (`:`) or restructure the sentence.
+- Avoid formulaic AI patterns ("In conclusion", "It's worth noting", "Let's dive in", overuse of bold, triadic "X, Y, and Z" filler).
+- **No document footer** (no "Created/Status/Next Phase" trailer, no horizontal-rule sign-off block).
+
+**Leak scan (run during self-validate):** grep the artifact for `—`, `.forge`, `state.json`, requirement/decision tags (`FR-`, `NFR-`, `OQ-`, `DD-` used as inline tags), `LOCKED`, ticket IDs, and internal names. Resolve every hit before finishing.
 
 ### 9. Update State
 
-Update FORGE-LOGS.md:
-```markdown
-### Phase 2: Design Creation — completed
-- Started: [timestamp]
-- Completed: [timestamp]
-- Artifact: [path]/DESIGN.md
-- Design research:
-  - [paths to design-artifact-*.md files]
-- Decisions:
-  - DD-1: [choice] ([rationale])
-  - DD-2: [choice] ([rationale])
-- Commit: [SHA]
+Write output artifacts:
+- `{feature_dir}/design/DESIGN.md`
+- `{feature_dir}/design/design-artifact-*.md` (one per design decision researched)
+
+Write `.phase-2-output.json` sidecar in `{feature_dir}/`:
+```json
+{
+  "phase": 2,
+  "status": "completed",
+  "artifacts": [
+    {
+      "path": "{feature_dir}/design/DESIGN.md",
+      "sha": "[git SHA]",
+      "size_bytes": [size]
+    },
+    {
+      "path": "{feature_dir}/design/design-artifact-auth-middleware.md",
+      "sha": "[git SHA]",
+      "size_bytes": [size]
+    }
+  ],
+  "decisions": [
+    "DD-1: Middleware pattern (matches codebase)",
+    "DD-2: JWT with RS256 (per security requirements)"
+  ],
+  "execution_details": {
+    "model": "qc-readonly",
+    "reasoning_lines": [count],
+    "context_usage_percent": [%],
+    "elapsed_seconds": [duration]
+  }
+}
 ```
 
-Commit:
-```bash
-git -C .forge add -A && git -C .forge commit -m "forge: phase 2 — design complete"
-```
+**Orchestrator updates state.json** (skill does NOT write to state.json directly)
+- Orchestrator reads .phase-2-output.json
+- Orchestrator updates state.json with artifacts and decisions
+- Orchestrator commits to .forge git
 
 ## Quality Checks
 
@@ -150,15 +227,64 @@ git -C .forge add -A && git -C .forge commit -m "forge: phase 2 — design compl
 - Error types and handling strategy defined
 - Breaking changes identified with migration paths
 
+## Error Handling
+
+### Before Starting
+
+1. **State.json Missing or Invalid:**
+   - If `.forge/state.json` cannot be found or is corrupted
+   - **Action:** ERROR: "state.json missing or corrupted. Run /forge to reinitialize."
+   - **Recovery:** Do not proceed; return error
+
+2. **Prerequisite Phase Not Complete:**
+   - If Phase 1 (Requirements) status is not "completed" or "approved"
+   - **Action:** ERROR: "Phase 1 (Requirements) must be completed first. Current status: {{ phase_1.status }}"
+   - **Recovery:** Return error; do not start design
+
+3. **REQUIREMENTS.md Missing:**
+   - If input requirements file does not exist at expected path
+   - **Action:** ERROR: "REQUIREMENTS.md not found at {{ expected_path }}"
+   - **Recovery:** Return error; escalate to orchestrator
+
+4. **Config Not Found:**
+   - If `.forge/FORGE-CONFIG.md` missing
+   - **Action:** WARN: "FORGE-CONFIG.md not found. Using best-effort codebase analysis."
+   - **Recovery:** Continue with codebase patterns only
+
+### During Execution
+
+5. **Codebase Unreadable:**
+   - If codebase cannot be analyzed (permissions, encoding)
+   - **Action:** WARN: "Could not fully analyze codebase. Proceeding with architectural guidelines only."
+   - **Recovery:** Continue with design best practices
+
+6. **Design Complexity High:**
+   - If design decisions too numerous to present at once (>10 independent decisions)
+   - **Action:** WARN: "Many design decisions identified ({{ count }}). Grouping dependent ones."
+   - **Recovery:** Cluster decisions; present in batches
+
+### Before Completing
+
+7. **Output Path Not Writable:**
+   - If `.forge/features/<slug>/design/` cannot be created or written to
+   - **Action:** ERROR: "Cannot write to {{ output_path }}: {{ reason }}"
+   - **Recovery:** Return error; do not complete phase
+
+8. **Placeholder Text or Ambiguity:**
+   - If DESIGN.md contains `[TBD]`, unresolved design decisions, or unclear contracts
+   - **Action:** WARN: "Unresolved items in design: {{ list }}. Escalating for user clarification."
+   - **Recovery:** List specific locations; ask for guidance before finalizing
+
 ## Anti-Patterns
 
 - Do NOT write actual implementation code
 - Do NOT skip the test matrix
 - Do NOT assume implementation details without analyzing codebase
 - Do NOT make design decisions silently — present options to user when multiple viable approaches exist
+- Do NOT silently fail — report all errors with clear context
 
 ## Handoff
 
-**Output:** `{design-dir}/DESIGN.md` + `design-artifact-*.md` files
+**Output:** `{feature_dir}/design/DESIGN.md` + `design-artifact-*.md` files + `.phase-2-output.json`
 
 **Next Phase:** forge-review (design review)

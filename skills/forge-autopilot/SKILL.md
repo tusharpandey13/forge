@@ -1,203 +1,355 @@
 ---
 name: forge-autopilot
-description: Automated multi-agent orchestration for the full forge workflow. Use when you want to run the complete forge pipeline with minimal human interaction.
+description: Automated multi-phase execution for forge workflow. Dispatches phases 1-12 to qc-readonly task agents using state.json, with gate evaluation, fix cycles, and optional parallelism for independent phases.
 ---
 
-# Forge Autopilot
+# Forge Autopilot (Dispatcher Model)
 
-Orchestrates the complete forge workflow using subagents. Runs design, review, planning, implementation, and documentation phases automatically with gate-based progression.
+Automated orchestration that dispatches all 12 phases to qc-readonly task agents using the dispatcher architecture. Manages state.json, evaluates gates, executes fix cycles, and handles escalation on repeated failures.
 
 ## When to Use
 
-- User wants to run the full forge pipeline end-to-end
-- User says "autopilot", "run forge automatically", or "forge auto"
-- User wants minimal interaction during the workflow
+- User wants to run the complete forge pipeline end-to-end with minimal intervention
+- User says "autopilot", "run forge automatically", "forge auto", or similar
+- User has an active feature and wants phases executed sequentially or in parallel (where independent)
 
 ## Prerequisites
 
-- `.forge/FORGE-CONFIG.md` must exist (run `/forge` first to initialize)
-- `forge/context/` must contain at least one context file
-- User has reviewed and approved the config
+- `.forge/` workspace initialized (run `/forge` first)
+- `.forge/state.json` exists with active feature
+- `.forge/FORGE-CONFIG.md` exists
+- Phase 1 through current phase either completed or approved
 
-## Core Principles
+## Core Architecture
 
-### P1: Artifact-Based Handoff
-- Subagents write output to files (forge/, .forge/)
-- Next subagent reads only the files it needs
-- Orchestrator tracks phase status and file paths — never reads full artifact content
-- Exception: orchestrator reads review output to decide pass/fail
+### Dispatcher Model (aligned with orchestrator)
+- Autopilot is a **thin dispatch wrapper** that cycles through phases automatically
+- All phases dispatch to **qc-readonly task agents** (not full-context opus/sonnet models)
+- Prompts constructed via [task-agent-prompt-template.md](./task-agent-prompt-template.md)
+- Task agents produce phase output; autopilot reads and validates
+- State.json is source of truth (not FORGE-LOGS.md)
 
-### P2: Minimal Context Per Agent
-- Each subagent gets a focused prompt:
-  1. Task description (what to produce)
-  2. Input file paths (what to read)
-  3. Output file path (where to write)
-  4. FORGE-CONFIG.md path (conventions to follow)
-  5. Template/format reference
-- Target: <30% of context window per agent
+### State Management
+- Load state.json before each phase dispatch
+- Update state.json atomically after phase completion
+- Read review_findings from state.json for gate decisions
+- Append operation records to .forge/operations.jsonl
 
-### P3: Phase Gates
-- Each review phase produces PROBLEMS/RECOMMENDATIONS
-- Gate rule: 0 CRITICAL, 0 MAJOR → pass
-- Fail → fix cycle: same agent resumes with review feedback (max 2 iterations)
-- After 2 failed fix cycles → escalate to user
+### Gate Evaluation
+- Review phases (3, 5, 7, 9, 11) produce `review_findings` in state.json
+- Gate rule: `review_findings.gate == "PASS"` (0 CRITICAL, 0 MAJOR)
+- Failure triggers fix cycle (max 2 per phase)
+- After 2 failures → escalate to user
 
-### P4: Parallelism
-- Design/Plan + Review: always sequential (review needs the artifact)
-- Implementation units within a tier: parallel if independent (auto-decided from IMPL-PLAN.md)
-- Test suites: parallel if independent
-- State updates: sequential (FORGE-LOGS.md must be consistent)
+### Fix Cycles
+1. Reload state.json to get latest review_findings
+2. Dispatch original phase again with review feedback
+3. Re-review (dispatch review phase again)
+4. Evaluate new gate
+5. Repeat up to 2 times; then escalate
 
-### P5: Escalation
-- Fix cycle exceeds 2 iterations → HALT, surface to user with summary
-- Agent exceeds 60% context usage → split into sub-tasks
-- Review produces >5 CRITICAL issues → likely design flaw, escalate to user
-- Implementation hits a major deviation → escalate to user
+### Parallelism (Optional)
+- Identify independent phases from IMPL-PLAN.md unit tiers
+- Implementation (Phase 8) units can dispatch in parallel if independent
+- Test implementation (Phase 10) units can dispatch in parallel if independent
+- All other phases sequential (dependencies require sequential execution)
+- Autopilot can opt to run sequentially for simplicity or parallel for speed
 
-## Workflow
+## Workflow — All 12 Phases
 
 ```
-Phase 1:  REQUIREMENT ANALYSIS  → forge/requirement/REQUIREMENTS.md
-Phase 2:  DESIGN CREATION       → forge/design/DESIGN.md
-Phase 3:  DESIGN REVIEW         → forge/design/DESIGN-REVIEW-1.md (gate)
-Phase 4:  IMPL PLAN             → forge/plan/IMPL-PLAN.md
-Phase 5:  PLAN REVIEW           → forge/plan/IMPL-PLAN-REVIEW-1.md (gate)
-Phase 6:  TEST PLAN             → forge/plan/TEST-PLAN.md
-Phase 7:  TEST PLAN REVIEW      → forge/plan/TEST-PLAN-REVIEW-1.md (gate)
-Phase 8:  IMPLEMENT CODE        → source code changes (gate: quality)
-Phase 9:  CODE REVIEW           → forge/review/CODE-REVIEW-1.md (gate)
-Phase 10: IMPLEMENT TESTS       → test code changes (gate: quality)
-Phase 11: TEST REVIEW           → forge/review/TEST-REVIEW-1.md (gate)
-Phase 12: DOCUMENTATION         → docs + context file
+LOOP phases 1 → 12:
+
+  IF phase.status == "pending":
+    1. Dispatch to qc-readonly task agent
+    2. Poll for completion (.phase-{N}-output.json appears)
+    3. Merge output into state.json
+    4. Commit phase artifacts
+
+  IF phase is review phase (3, 5, 7, 9, 11):
+    5. Check state.json.phases[N].review_findings.gate
+    6. IF gate == "FAIL" AND fix_cycle_count < 2:
+         a. Dispatch original phase with review feedback
+         b. Re-review
+         c. Re-check gate
+         d. increment fix_cycle_count
+    7. IF gate == "FAIL" AND fix_cycle_count >= 2:
+         Escalate to user with summary
+
+  IF phase passed or skipped:
+    8. Continue to next phase
+
+END LOOP
+
+OUTPUT: Feature complete or escalation message
 ```
 
-## Agent Dispatch
+## Phase Specifications
 
-### Requirement Agent
-- **Model:** opus
-- **Input:** forge/context/*.md, FORGE-CONFIG.md, codebase structure
-- **Output:** forge/requirement/REQUIREMENTS.md
-- **Skill:** forge-requirement-analysis
+All 12 phases dispatch using the orchestrator's dispatcher model:
 
-### Design Agent
-- **Model:** opus (design requires deep reasoning)
-- **Input:** REQUIREMENTS.md, codebase architecture, FORGE-CONFIG.md
-- **Output:** DESIGN.md + design-artifact-*.md
-- **Skill:** forge-design-creation
-- **Note:** Design agent spawns research subagents for design decisions
+| Phase | Name | Type | Input | Output | Review | Gate |
+|-------|------|------|-------|--------|--------|------|
+| 1 | Requirement Analysis | task_agent | context/* | REQUIREMENTS.md | N/A | N/A |
+| 2 | Design Creation | task_agent | REQUIREMENTS.md | DESIGN.md | N/A | N/A |
+| 3 | Design Review | task_agent | DESIGN.md + REQUIREMENTS.md | DESIGN-REVIEW-{N}.md | Yes | review_findings |
+| 4 | Implementation Planning | task_agent | DESIGN.md | IMPL-PLAN.md | N/A | N/A |
+| 5 | Impl Plan Review | task_agent | IMPL-PLAN.md + DESIGN.md | IMPL-PLAN-REVIEW-{N}.md | Yes | review_findings |
+| 6 | Test Planning | task_agent | DESIGN.md | TEST-PLAN.md | N/A | N/A |
+| 7 | Test Plan Review | task_agent | TEST-PLAN.md + DESIGN.md | TEST-PLAN-REVIEW-{N}.md | Yes | review_findings |
+| 8 | Code Implementation | task_agent | IMPL-PLAN.md | source files | N/A | N/A |
+| 9 | Code Review | task_agent | code + IMPL-PLAN.md | CODE-REVIEW-{N}.md | Yes | review_findings |
+| 10 | Test Implementation | task_agent | TEST-PLAN.md | test files | N/A | N/A |
+| 11 | Test Review | task_agent | tests + TEST-PLAN.md | TEST-REVIEW-{N}.md | Yes | review_findings |
+| 12 | Documentation | task_agent | all artifacts | docs + context | N/A | N/A |
 
-### Review Agent
-- **Model:** opus (review requires deep analysis)
-- **Input:** artifact being reviewed + upstream artifacts
-- **Output:** {ARTIFACT}-REVIEW-{N}.md
-- **Skill:** forge-review
+**References:** All phases use Tier 1 specs from orchestrator (state-schema.md, task-agent-prompt-template.md, cascade-detector.md)
 
-### Plan Agent
-- **Model:** opus
-- **Input:** DESIGN.md, REQUIREMENTS.md, codebase, FORGE-CONFIG.md
-- **Output:** IMPL-PLAN.md
-- **Skill:** forge-implementation-planning
+## Autopilot Dispatch Loop (Pseudocode)
 
-### Test Plan Agent
-- **Model:** opus
-- **Input:** IMPL-PLAN.md, DESIGN.md, existing tests, FORGE-CONFIG.md
-- **Output:** TEST-PLAN.md
-- **Skill:** forge-test-planning
+```
+FUNCTION autopilot_run(feature_id):
+    state = load_state()
+    feature = find_active_feature(state)
 
-### Implementation Agent
-- **Model:** opus (first pass), sonnet (fix cycles)
-- **Input:** IMPL-PLAN.md, source files, FORGE-CONFIG.md
-- **Output:** modified source files
-- **Skill:** forge-implement
-- **Note:** May spawn parallel subagents for independent units
+    IF NOT feature:
+        OUTPUT: "No active feature. Use /forge to create one."
+        RETURN
 
-### Test Implementation Agent
-- **Model:** opus (first pass), sonnet (fix cycles)
-- **Input:** TEST-PLAN.md, source files, existing tests, FORGE-CONFIG.md
-- **Output:** test files
-- **Skill:** forge-implement-tests
+    // Display initial status
+    display_phase_timeline(feature)
 
-### Documentation Agent
-- **Model:** sonnet (documentation is straightforward)
-- **Input:** all artifacts, source files, FORGE-CONFIG.md
-- **Output:** docstrings, CONTEXT.md, README updates
-- **Skill:** forge-documentation
+    fix_cycle_counters = {}  // phase → count
 
-## Gate Evaluation
+    FOR phase_num = 1 TO 12:
+        IF feature.phases[phase_num].status IN ["approved", "completed"]:
+            CONTINUE  // Skip already-completed phases
 
-After each review phase, the orchestrator:
+        IF feature.phases[phase_num].status == "failed":
+            OUTPUT: "Phase {{phase_num}} previously failed. Resuming from user action."
+            // Wait for user to retry or skip
+            RETURN
 
-1. Read the review artifact
-2. Count CRITICAL and MAJOR findings
-3. Decision:
-   ```
-   0 CRITICAL + 0 MAJOR → PASS → proceed to next phase
-   Any CRITICAL or MAJOR → FAIL → enter fix cycle
-   ```
+        // Phase pending or invalidated
+        OUTPUT: ">>> Dispatching Phase {{phase_num}}: {{ PHASE_NAMES[phase_num] }}"
 
-### Fix Cycle
+        // 1. Dispatch to task agent
+        result = dispatch_phase_to_task_agent(state, phase_num)
+        IF NOT result.success:
+            OUTPUT: "Phase {{phase_num}} dispatch failed (timeout after 30 min)"
+            feature.phases[phase_num].status = "failed"
+            save_state_atomic(state, {op: "phase_timeout", phase: phase_num})
+            RETURN
 
-1. Resume the original agent (designer, planner, implementer) with:
-   - Path to the review file
-   - Instruction: "Fix all CRITICAL and MAJOR findings"
-2. After fixes → re-review (dispatch review agent again)
-3. New review artifact: `{ARTIFACT}-REVIEW-{N+1}.md`
-4. Re-evaluate gate
-5. Max 2 fix cycles per phase. After that → escalate to user:
-   ```
-   FORGE :: ESCALATION
-     Phase [N] failed gate after 2 fix cycles
-     Review: forge/design/DESIGN-REVIEW-3.md
-     Remaining issues:
-     - [CRITICAL] ...
-     - [MAJOR] ...
-     Action required: User must resolve or adjust scope
-   ```
+        // 2. Merge output into state.json
+        phase_output = result.output
+        merge_phase_output(feature, phase_num, phase_output)
+        save_state_atomic(state, {op: "phase_complete", phase: phase_num})
 
-## Context Budget
+        // 3. Commit phase artifacts
+        commit_phase_artifacts(phase_num, "completed")
 
-| Agent | Est. Input | Est. Output | Budget |
-|-------|-----------|-------------|--------|
-| Requirements | ~30k tokens | ~10k | 20% |
-| Design | ~50k tokens | ~15k | 33% |
-| Review | ~30k tokens | ~5k | 18% |
-| Plan | ~40k tokens | ~10k | 25% |
-| Test Plan | ~40k tokens | ~10k | 25% |
-| Implement | ~30k tokens/unit | ~10k/unit | 20% |
-| Tests | ~30k tokens/suite | ~10k/suite | 20% |
-| Docs | ~20k tokens | ~5k | 13% |
+        // 4. Review gate evaluation (if review phase)
+        IF phase_num IN [3, 5, 7, 9, 11]:
+            fix_cycle_counters[phase_num] = 0  // Reset counter for this phase
 
-If an agent exceeds 60% → split task into smaller sub-tasks.
+            LOOP fix_cycle_attempts = 1 TO 2:
+                IF feature.phases[phase_num].review_findings.gate == "PASS":
+                    OUTPUT: "Phase {{phase_num}}: Gate PASS"
+                    BREAK
 
-## Checkpoint Strategy
+                IF feature.phases[phase_num].review_findings.gate == "FAIL":
+                    IF fix_cycle_attempts < 2:
+                        OUTPUT: "Phase {{phase_num}}: Gate FAIL — attempting fix cycle {{fix_cycle_attempts}}"
 
-Forge git commits after each phase:
+                        // Re-dispatch original phase with review feedback
+                        OUTPUT: "  Re-dispatching phase {{phase_num - 1}} with review findings"
+                        result = dispatch_phase_fix_cycle(state, phase_num - 1, phase_num)
+                        IF NOT result.success:
+                            OUTPUT: "Fix cycle dispatch failed"
+                            BREAK
 
-- Phase 1 complete: `forge: requirements — [feature summary]`
-- Phase 2 approved: `forge: design — [approach summary]`
-- Phase 4 approved: `forge: plan — [unit count] implementation units`
-- Phase 6 approved: `forge: test plan — [suite count] test suites`
-- Phase 8 complete: `forge: implement — [unit summary]`
-- Phase 10 complete: `forge: tests — [coverage]% coverage`
-- Phase 12 complete: `forge: docs — feature complete`
+                        // Re-dispatch review phase
+                        OUTPUT: "  Re-reviewing phase {{phase_num}}"
+                        result = dispatch_phase_to_task_agent(state, phase_num)
+                        IF NOT result.success:
+                            OUTPUT: "Review re-dispatch failed"
+                            BREAK
 
-Each gate pass triggers a commit. SHAs recorded in FORGE-LOGS.md.
+                        // Merge new review findings
+                        phase_output = result.output
+                        merge_phase_output(feature, phase_num, phase_output)
+                        save_state_atomic(state, {op: "phase_fix_cycle", phase: phase_num, cycle: fix_cycle_attempts})
+                        commit_phase_artifacts(phase_num, "fix_cycle_{{fix_cycle_attempts}}")
+                    ELSE:  // fix_cycle_attempts >= 2
+                        OUTPUT: "ESCALATION: Phase {{phase_num}} failed after 2 fix cycles"
+                        OUTPUT: "Review artifact: .forge/features/{{feature.id}}/{{PHASE_ARTIFACTS[phase_num]}}"
+                        OUTPUT: "Findings: "
+                        FOR finding IN phase_output.findings:
+                            IF finding.severity IN ["CRITICAL", "MAJOR"]:
+                                OUTPUT: "  [{{finding.severity}}] {{finding.text}}"
 
-## User Interaction Points
+                        feature.phases[phase_num].status = "failed"
+                        save_state_atomic(state, {op: "escalation", phase: phase_num})
+                        RETURN
 
-Even in autopilot mode, the orchestrator pauses for user input at:
+        // 5. Mark phase as approved (for non-review phases)
+        IF phase_num NOT IN [3, 5, 7, 9, 11]:
+            feature.phases[phase_num].status = "approved"
+            save_state_atomic(state, {op: "phase_approve", phase: phase_num})
+            commit_phase_artifacts(phase_num, "approved")
 
-1. **Config initialization** — user confirms conventions and custom instructions
-2. **Requirement clarification** — if the requirement agent has questions
-3. **Design decisions** — low-confidence DDs presented for user choice
-4. **Escalations** — failed gates, major deviations, context overflow
-5. **Final review** — before marking feature complete
+        // 6. Cascade detection (optional; orchestrator owns this)
+        IF phase_output.artifacts NOT empty:
+            OUTPUT: "  Cascade detection: checking for downstream impact"
+            affected = detect_affected_phases(phase_output.artifacts[0].path, feature)
+            IF affected.downstream NOT empty:
+                OUTPUT: "  Affected phases: {{ affected.downstream }}"
+                FOR affected_phase IN affected.downstream:
+                    feature.phases[affected_phase].status = "invalidated"
+                save_state_atomic(state, {op: "cascade_invalidate", phase: phase_num, affected: affected.downstream})
 
-All other transitions are automatic.
+    // All phases completed
+    OUTPUT: "Feature complete! All 12 phases approved."
+    feature.status = "completed"
+    save_state_atomic(state, {op: "feature_complete", feature_id: feature.id})
+    commit_phase_artifacts(12, "feature_complete")
+    RETURN
+END FUNCTION
+```
+
+## Fix Cycle Dispatch
+
+```
+FUNCTION dispatch_phase_fix_cycle(state, artifact_phase, review_phase):
+    // artifact_phase: the phase that produced the artifact being reviewed (e.g., 2 for Design)
+    // review_phase: the review phase (e.g., 3 for Design Review)
+
+    // 1. Get review findings from state
+    review_findings = state.phases[review_phase].review_findings
+
+    // 2. Construct fix prompt with review feedback
+    prompt = construct_agent_prompt(
+        feature_name: state.features[0].name,
+        phase_number: artifact_phase,
+        phase_name: PHASE_NAMES[artifact_phase],
+        feature_dir: state.features[0].root_dir,
+        config_path: ".forge/FORGE-CONFIG.md",
+        input_artifacts: prior_artifacts(artifact_phase),
+        output_path: compute_output_path(artifact_phase),
+        instructions: extract_phase_instructions(artifact_phase),
+        quality_gate: PHASE_QUALITY_GATES[artifact_phase]
+    )
+
+    // 3. Append fix cycle instruction
+    prompt += "\n\n## Fix Cycle Feedback\n\n"
+    prompt += "The previous review produced these findings:\n\n"
+    FOR finding IN review_findings.findings:
+        IF finding.severity IN ["CRITICAL", "MAJOR"]:
+            prompt += "- [{{finding.severity}}] {{finding.text}}\n"
+    prompt += "\nResolve all CRITICAL and MAJOR findings in your updated artifact.\n"
+
+    // 4. Dispatch and wait
+    result = dispatch_task_agent_async(qc_readonly, prompt)
+    phase_output = poll_for_completion(result.task_id, timeout: 30_min)
+
+    RETURN phase_output
+END FUNCTION
+```
+
+## State Operations
+
+Autopilot delegates state management to orchestrator but records operations:
+
+```
+FUNCTION save_state_atomic(state, operation_record):
+    // 1. Write temp file
+    temp_path = ".forge/state.json.tmp." + random_hex(8)
+    write_json(temp_path, state)
+
+    // 2. Atomic rename
+    atomic_rename(temp_path, ".forge/state.json")
+
+    // 3. Append operation
+    operation = {
+        ts: ISO8601_NOW(),
+        op: operation_record.op,
+        phase: operation_record.phase,
+        message: operation_record.message or ""
+    }
+    append_jsonl(".forge/operations.jsonl", operation)
+
+    RETURN success
+END FUNCTION
+```
 
 ## Resumability
 
-If autopilot is interrupted (context limit, error, user pause):
-1. FORGE-LOGS.md has full state
-2. Restart autopilot → reads logs → resumes from last completed phase
-3. In-progress phases restart from the beginning of that phase (artifacts are idempotent)
+If autopilot is interrupted:
+
+1. Run `/forge` or autopilot again
+2. Autopilot reads state.json
+3. Skips all phases with status="approved" or "completed"
+4. Resumes from first pending or invalidated phase
+5. If a phase is "in_progress", restart from beginning (task agents are idempotent)
+6. If a phase is "failed", halt and ask user to retry or fix
+
+## Escalation Conditions
+
+Autopilot escalates to user (halts) if:
+
+1. **Gate failure after 2 fix cycles** — design/plan/code quality issues cannot be resolved
+2. **Task agent timeout** — phase execution > 30 minutes
+3. **State corruption** — state.json unreadable or invalid
+4. **Cascade invalidation** — upstream artifact changes invalidate multiple downstream phases
+5. **User intervention required** — requirements need clarification, design decisions need approval
+
+Escalation message includes:
+- Phase number and name
+- Specific finding or error
+- Artifact path for review
+- Suggested next action
+
+## Integration Points
+
+**Orchestrator functions reused:**
+- `dispatch_phase_to_task_agent()` — from orchestrator (Step 3: Dispatch or Nudge)
+- `detect_affected_phases()` — cascade detector
+- `save_state_atomic()` — state manager
+- `commit_phase_artifacts()` — git operations
+- Task agent prompt template from [task-agent-prompt-template.md](./task-agent-prompt-template.md)
+
+**References:**
+- [state-schema.md](./state-schema.md) — state.json structure and operations
+- [cascade-detector.md](./cascade-detector.md) — downstream impact detection
+- [task-agent-prompt-template.md](./task-agent-prompt-template.md) — prompt construction for all phases
+- [FORGE-CONFIG.md](../../FORGE-CONFIG.md) — project conventions (read by task agents)
+
+## Execution Strategy
+
+**Sequential (default):**
+- Phases 1-12 execute in order
+- Each phase waits for completion before starting next
+- Simple, predictable, no parallel complexity
+
+**Parallel (optional, phases 8 & 10):**
+- Read IMPL-PLAN.md unit tiers for phase 8 dependencies
+- Read TEST-PLAN.md suite tiers for phase 10 dependencies
+- Dispatch independent units/suites in parallel
+- Wait for all to complete before proceeding to next phase
+- Requires orchestrator support for parallel task agent dispatch
+
+## User Interaction Minimized
+
+Autopilot requires user input **only for:**
+1. **Escalations** — respond to gate failures or clarifications needed
+2. **Resume decisions** — if interrupted, choose to resume or restart
+
+All other phase transitions are automatic.
+
+---
+
+**Status:** Rewritten for dispatcher architecture
+**Version:** 2.0 (Dispatcher Model)
+**Created:** 2026-04-10
+**References:** Orchestrator (SKILL.md), State Schema, Task Agent Prompt Template
