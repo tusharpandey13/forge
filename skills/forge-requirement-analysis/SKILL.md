@@ -63,6 +63,41 @@ Generate 5-10 specific questions for the user. They have Confluence/Slack access
 
 Continue asking questions until requirements are complete and unambiguous.
 
+### 5a. GATE 1: Capability Preflight
+
+Before documenting requirements, **enumerate every action the feature will likely need that the agent cannot perform directly**. For each blockers, emit exact copy-paste manual commands/handoffs for the user up front:
+
+- Interactive SSH/terminals
+- External writes (CLI tenant config, cloud provider tenants, third-party SaaS settings)
+- Network mutations (POST/PUT to external APIs, configuration writes)
+- MCP servers that may be disconnected or unavailable
+- Cloud/SaaS APIs requiring manual setup (auth, permissions, credentials)
+- Privileged operations (sudo, elevated access)
+
+**Checklist:**
+- [ ] All external APIs and services identified
+- [ ] Each blocked action has exact manual command or handoff step
+- [ ] Commands include error recovery guidance
+- [ ] User can copy/paste each command without modification
+- [ ] Capability scan recorded in requirements output (see Output below)
+
+**Frame:** Surface blockers at the start, plan a clean manual handoff, never stall mid-task.
+
+### 5b. GATE 2: Verify-Before-Claim Preflight
+
+Add a hard rule: **before asserting any negative about environment/state** ("repo missing", "X not supported", "file absent", "tool unavailable"), verify the obvious cause first and cite the command output.
+
+**Checklist:**
+- [ ] No unverified claims about repo state, tool availability, or file absence
+- [ ] For any negative assertion: check active git/gh account (`git config user.email`, `gh auth status`)
+- [ ] For env state: verify env vars are set (e.g., `echo $ENV_VAR`)
+- [ ] For file/path claims: verify actual path and permissions (`ls -la`, `find`)
+- [ ] For tool unavailability: confirm tool is installed and in PATH (`which`, `<tool> --version`)
+- [ ] For migration targets, abbreviations, conventions: verify against config or codebase; if unknown, ask or verify, don't guess
+- [ ] Every negative claim includes command output in clarifying questions or requirements
+
+**Frame:** Unverified assumptions cause mid-task stalls and false negatives. Verify first, claim second.
+
 ### 6. Document
 
 Create formal requirements document using the [requirements-template.md](./references/requirements-template.md).
@@ -78,6 +113,23 @@ Re-read the artifact. Verify:
 - All sections have content
 - Cross-reference IDs (FR-X, NFR-X) are consistent
 Fix any issues silently.
+
+### 7a. Capability-Scan Output (Gate 1)
+
+If Gate 1 (Capability Preflight) identifies blocked actions, add a **Capability Constraints** section to REQUIREMENTS.md (before Acceptance Criteria or Out of Scope). Format:
+
+```
+## Capability Constraints
+
+The following actions are required but cannot be performed by the agent directly:
+
+| Action | Constraint | Manual Command / Handoff |
+|--------|-----------|-------------------------|
+| (action) | (external system / blocked reason) | (exact copy-paste command or instructions) |
+| Example: Provision AWS IAM role | Cloud API mutation | `aws iam create-role --role-name ... --assume-role-policy-document ...` |
+
+**Recovery:** User runs listed commands before feature handoff resumes. Agent will pause and provide explicit instructions at each gate.
+```
 
 ### 8. Update State
 
@@ -179,6 +231,9 @@ Write `.phase-1-output.json` sidecar (full absolute path provided by orchestrato
 - Do NOT include implementation details
 - Do NOT make assumptions without asking clarifying questions
 - Do NOT silently fail — report all errors with clear context
+- **Do NOT skip Gate 1 (Capability Preflight)** — enumerate external actions up front; emit manual commands; surface blockers before work starts
+- **Do NOT skip Gate 2 (Verify-Before-Claim Preflight)** — never assert negative claims without verifying obvious causes first (active account, env state, actual path/file); cite command output
+- Do NOT guess at repo state, migration targets, abbreviations, or conventions; verify or ask instead
 
 ## Handoff
 
