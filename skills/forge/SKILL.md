@@ -18,6 +18,7 @@ Main orchestrator skill implementing the dispatcher-based workflow. Manages stat
 4. **Feature Namespacing:** All artifacts under `.forge/features/<feature-slug>/`
 5. **Mandatory Status Display:** First output always shows phase timeline and current status (NFR-4)
 6. **Cascade Detection:** After artifact changes, invalidate downstream phases (FR-6)
+7. **Anti-Phase-Jump Enforcement:** Forge NEVER permits skipping phases. All features follow the full 12-phase pipeline in strict order, regardless of perceived task size. Small tasks are NOT exempt.
 
 **References:**
 - See [state-schema.md](./references/state-schema.md) for complete state.json structure
@@ -178,6 +179,8 @@ IF active_feature found:
 
 After mandatory status display, determine next action based on current phase status:
 
+**CRITICAL ORCHESTRATOR RULE:** If a user requests to jump to an implementation phase (4, 6, 8, 10) or skip phases, orchestrator MUST refuse with the anti-phase-jump message and explain why.
+
 ```
 SWITCH current_phase.status:
     CASE "pending":
@@ -185,7 +188,16 @@ SWITCH current_phase.status:
             OUTPUT: "Next: Start requirement analysis"
             OUTPUT: "  Use: /require-analysis (or similar)"
         ELSE:
-            OUTPUT: "Next: Complete phase {{ current_phase.number - 1 }} first"
+            // Phases 1..N-1 are not complete; block progression to current_phase
+            OUTPUT: "Cannot start Phase {{ current_phase.number }} yet"
+            OUTPUT: "Prerequisites not met:"
+            FOR phase_num = 1 TO (current_phase.number - 1):
+                prior = active_feature.phases[phase_num]
+                IF prior.status NOT IN ["approved", "completed"]:
+                    OUTPUT: "  ✗ Phase {{ phase_num }}: {{ prior.status }}"
+            OUTPUT: ""
+            OUTPUT: "Forge enforces sequential phases — no jumping, no 'small task' exemptions"
+            OUTPUT: "Next: Complete the outstanding prerequisite phases first"
 
     CASE "in_progress":
         OUTPUT: "Phase in progress..."
@@ -244,13 +256,28 @@ When orchestrator needs to dispatch a phase to a task agent:
 
 ```
 FUNCTION dispatch_phase(feature_state, phase_number):
-    // 1. Check prerequisites
-    IF phase_number > 1:
-        prior_phase = feature_state.phases[phase_number - 1]
+    // 0. ANTI-PHASE-JUMP ENFORCEMENT
+    // Forge NEVER permits skipping phases. Every feature must progress in strict order: 1→2→...→12.
+    // If any prerequisite phase is not approved/completed, REJECT and EXPLAIN why this matters.
+    
+    FOR check_phase = 1 TO (phase_number - 1):
+        prior_phase = feature_state.phases[check_phase]
         IF prior_phase.status NOT IN ["approved", "completed"]:
-            OUTPUT: "Cannot start phase {{ phase_number }}: phase {{ phase_number - 1 }} not complete"
-            RETURN
-
+            OUTPUT: "❌ PHASE JUMP BLOCKED"
+            OUTPUT: "Forge policy: NO PHASE SKIPPING, regardless of task size"
+            OUTPUT: ""
+            OUTPUT: "Current blocker:"
+            OUTPUT: "  Phase {{ check_phase }} ({{ PHASE_NAMES[check_phase] }}) is {{ prior_phase.status }}, not approved"
+            OUTPUT: ""
+            OUTPUT: "Why this rule exists:"
+            OUTPUT: "  • Requirement → Design → Review ensures feature scope is locked before code"
+            OUTPUT: "  • Skipping phases leads to rework, scope creep, and artifact pollution"
+            OUTPUT: "  • Small tasks are NOT exempt — all features follow the full pipeline"
+            OUTPUT: ""
+            OUTPUT: "Next step: Complete phase {{ check_phase }} first, then return here"
+            RETURN {success: false, reason: "prerequisite_phase_incomplete"}
+    
+    // 1. All prerequisites satisfied; proceed
     // 2. Resolve skill file and read full content (E2: Skill Content Inlining)
     skill_name = PHASE_SKILLS[phase_number]
     skill_file_path = resolve_path("skills/" + skill_name + "/SKILL.md")
@@ -302,6 +329,11 @@ Before marking phase complete and merging output into state, orchestrator valida
 FUNCTION post_phase_validation(phase_number, phase_output):
     // Called after orchestrator reads .phase-N-output.json but BEFORE merge_phase_output()
 
+    // ARTIFACT BOUNDARY ENFORCEMENT (Hard Rule)
+    // ALL forge artifacts (requirements, design, plans, reviews, test plans, docs) MUST live under .forge/
+    // ONLY actual product code and user-requested end-user docs go in the project working tree.
+    // This prevents phase-jumping agents from polluting the project git with internal forge files.
+
     // Check 1: No symlinks in feature directory
     symlinks = find_all(".forge/features/", type="symlink")
     IF symlinks not empty:
@@ -313,24 +345,53 @@ FUNCTION post_phase_validation(phase_number, phase_output):
             mv(symlink.tmp, symlink)
             OUTPUT: "  ✓ Converted: " + symlink
 
-    // Check 2: All artifacts under .forge/features/ (except phases 8, 10, 12 which may have edge cases)
-    IF phase_number NOT IN [8, 10, 12]:
-        FOR each artifact IN phase_output.artifacts:
-            IF NOT artifact.path starts_with(".forge/features/"):
-                OUTPUT: "⚠ Artifact outside boundary: " + artifact.path
-                correct_path = compute_correct_path(artifact.path, phase_number)
-                MOVE(artifact.path, correct_path)
-                artifact.path = correct_path
-                OUTPUT: "  ✓ Moved to: " + correct_path
+    // Check 2: All artifacts MUST be under .forge/features/ (Hard Boundary)
+    // Phases 8, 10, 12 may generate product code outside .forge/, but NEVER internal forge docs
+    FOR each artifact IN phase_output.artifacts:
+        // If artifact is an internal forge doc (REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, review files, etc.)
+        is_internal_doc = artifact.name IN ["REQUIREMENTS.md", "DESIGN.md", "IMPL-PLAN.md", 
+                                            "IMPL-REVIEW.md", "TEST-PLAN.md", "TEST-REVIEW.md", 
+                                            "CODE-REVIEW.md", "TEST-CODE-REVIEW.md"]
+        
+        IF is_internal_doc AND NOT artifact.path starts_with(".forge/features/"):
+            OUTPUT: "❌ ARTIFACT BOUNDARY VIOLATION"
+            OUTPUT: "Artifact: " + artifact.name
+            OUTPUT: "Found: " + artifact.path
+            OUTPUT: ""
+            OUTPUT: "Forge Rule (Hard):"
+            OUTPUT: "  ALL internal artifacts (requirements, design, plans, reviews) MUST be under .forge/"
+            OUTPUT: "  This includes: REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, test/review docs"
+            OUTPUT: "  Do NOT put them in the project working tree"
+            OUTPUT: ""
+            correct_path = compute_correct_path(artifact.path, phase_number)
+            MOVE(artifact.path, correct_path)
+            artifact.path = correct_path
+            OUTPUT: "  ✓ Auto-corrected to: " + correct_path
+        
+        // For product code in phases 8, 10: verify it's in /src or /lib, not root
+        IF phase_number IN [8, 10]:
+            IF NOT (artifact.path starts_with(".forge/") OR 
+                    artifact.path starts_with("src/") OR 
+                    artifact.path starts_with("lib/") OR
+                    artifact.path matches production_file_patterns()):
+                OUTPUT: "⚠ Check: Product code in unusual location: " + artifact.path
+                OUTPUT: "  (Phase {{ phase_number }} may intentionally place code here — OK if reviewed)"
 
-    // Check 3: No spurious files created outside .forge/ in project repo
+    // Check 3: No spurious forge docs in project repo
     project_repo_status = git_status(".")  // Parent repo (not .forge/.git)
-    unexpected_changes = project_repo_status.untracked_files + project_repo_status.modified_files
-    IF unexpected_changes not empty:
-        OUTPUT: "⚠ Unexpected changes in project repo:"
-        FOR each change IN unexpected_changes:
-            OUTPUT: "  - " + change
-        OUTPUT: "Recommend: Review and stage/stash before committing."
+    unexpected_internal_docs = []
+    FOR each untracked_file IN project_repo_status.untracked_files:
+        IF untracked_file matches ["*REQUIREMENTS.md", "*DESIGN.md", "*IMPL-PLAN.md", "*REVIEW.md"]:
+            unexpected_internal_docs.append(untracked_file)
+    
+    IF unexpected_internal_docs not empty:
+        OUTPUT: "⚠ ARTIFACT POLLUTION DETECTED"
+        OUTPUT: "Internal forge docs found in project repo (should be under .forge/):"
+        FOR each doc IN unexpected_internal_docs:
+            OUTPUT: "  - " + doc
+        OUTPUT: ""
+        OUTPUT: "This happens when agents phase-jump and improvise files outside .forge/"
+        OUTPUT: "Action: Move these to .forge/features/<slug>/ or remove."
 
     RETURN phase_output  // Modified if auto-fixes applied
 END FUNCTION
@@ -803,6 +864,7 @@ All 12 phases in order:
 4. **Atomic Filesystem:** Temp file + rename is atomic on POSIX filesystems (Linux, macOS)
 5. **Task Agent Dispatch:** Task agents can be dispatched asynchronously; orchestrator polls for completion
 6. **Read-Only Task Agents:** Task agents use `qc-readonly` model (enforced write-only to artifacts)
+7. **NO PHASE SKIPPING:** Orchestrator ALWAYS enforces sequential phase progression 1→2→...→12. No exemptions for small tasks, no fast-paths, no jumps. Violation → explicit refusal with detailed reason.
 
 ## Workflow Summary
 
@@ -823,6 +885,11 @@ IF no active feature:
   RETURN
 
 IF phase pending:
+  // ANTI-PHASE-JUMP CHECK
+  IF phase_number > 1 AND prerequisite phases NOT complete:
+    OUTPUT: "❌ Cannot start — prerequisites incomplete"
+    OUTPUT: "Forge: NO PHASE SKIPPING (applies to all tasks)"
+    RETURN
   NUDGE: "Ready to start phase N"
 
 IF phase in_progress:
@@ -838,6 +905,12 @@ IF phase failed:
 
 IF phase invalidated:
   NUDGE: "Re-run this phase or use forge cascade-fix"
+
+---
+ARTIFACT BOUNDARY ENFORCEMENT (Throughout Workflow):
+  • All forge internals (REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, reviews, test plans) → .forge/
+  • Product code (phases 8, 10) → src/, lib/, or project structure
+  • NEVER put forge docs in project working tree
 ```
 
 ---
