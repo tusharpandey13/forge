@@ -1,6 +1,9 @@
 ---
 name: forge-documentation
 description: Create documentation after implementation and reviews are complete. Use when documenting features, adding docstrings, updating README, or creating context files.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Documentation

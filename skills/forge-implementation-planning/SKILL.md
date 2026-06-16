@@ -1,6 +1,9 @@
 ---
 name: forge-implementation-planning
 description: Convert design to implementation plan with pseudocode. Use when creating impl plans or working with DESIGN.md.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Implementation Planning
@@ -119,7 +122,7 @@ Write `.phase-4-output.json` sidecar in `{feature_dir}/`:
 
 ## Deliverables
 
-- `{feature_dir}/plan/IMPL-PLAN.md` — use [IMPL-PLAN-template.md](./IMPL-PLAN-template.md)
+- `{feature_dir}/plan/IMPL-PLAN.md` — use [impl-plan-template.md](./references/impl-plan-template.md)
 
 ## Quality Checks
 

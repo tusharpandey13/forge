@@ -1,6 +1,9 @@
 ---
 name: forge-autopilot
 description: Automated multi-phase execution for forge workflow. Dispatches phases 1-12 to qc-readonly task agents using state.json, with gate evaluation, fix cycles, and optional parallelism for independent phases.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Forge Autopilot (Dispatcher Model)
@@ -25,7 +28,7 @@ Automated orchestration that dispatches all 12 phases to qc-readonly task agents
 ### Dispatcher Model (aligned with orchestrator)
 - Autopilot is a **thin dispatch wrapper** that cycles through phases automatically
 - All phases dispatch to **qc-readonly task agents** (not full-context opus/sonnet models)
-- Prompts constructed via [task-agent-prompt-template.md](./task-agent-prompt-template.md)
+- Prompts constructed via [task-agent-prompt-template.md](../forge/references/task-agent-prompt-template.md)
 - Task agents produce phase output; autopilot reads and validates
 - State.json is source of truth (not FORGE-LOGS.md)
 
@@ -317,13 +320,13 @@ Escalation message includes:
 - `detect_affected_phases()` — cascade detector
 - `save_state_atomic()` — state manager
 - `commit_phase_artifacts()` — git operations
-- Task agent prompt template from [task-agent-prompt-template.md](./task-agent-prompt-template.md)
+- Task agent prompt template from [task-agent-prompt-template.md](../forge/references/task-agent-prompt-template.md)
 
 **References:**
-- [state-schema.md](./state-schema.md) — state.json structure and operations
-- [cascade-detector.md](./cascade-detector.md) — downstream impact detection
-- [task-agent-prompt-template.md](./task-agent-prompt-template.md) — prompt construction for all phases
-- [FORGE-CONFIG.md](../../FORGE-CONFIG.md) — project conventions (read by task agents)
+- [state-schema.md](../forge/references/state-schema.md) — state.json structure and operations
+- [cascade-detector.md](../forge/references/cascade-detector.md) — downstream impact detection
+- [task-agent-prompt-template.md](../forge/references/task-agent-prompt-template.md) — prompt construction for all phases
+- [FORGE-CONFIG.md](.forge/FORGE-CONFIG.md) — project conventions (read by task agents)
 
 ## Execution Strategy
 

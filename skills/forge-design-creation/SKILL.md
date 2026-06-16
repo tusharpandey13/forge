@@ -1,6 +1,9 @@
 ---
 name: forge-design-creation
 description: Create technical design from requirements. Use when creating design docs, solution architecture, or working with REQUIREMENTS.md.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Design Creation
@@ -115,7 +118,7 @@ With user's DD choices, create the full design:
 5. Document design decisions, **ordered by impact** (highest first), with rationale and the chosen approach
 6. Create sequence diagrams (mermaid) for every multi-component interaction
 
-Output: `{feature_dir}/design/DESIGN.md` using [DESIGN-template.md](./DESIGN-template.md)
+Output: `{feature_dir}/design/DESIGN.md` using [design-template.md](./references/design-template.md)
 - **Variable form:** `{feature_dir}/design/DESIGN.md`
 - **Concrete example:** `/Users/alice/project/.forge/features/auth-middleware/design/DESIGN.md`
 

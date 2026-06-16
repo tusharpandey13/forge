@@ -1,6 +1,9 @@
 ---
 name: forge-review
 description: Systematic review of design docs, plans, or code. Use when reviewing, doing code review, or asking for feedback on artifacts.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Review
@@ -52,7 +55,7 @@ If this is a re-review (N > 1):
 
 ### 3. Execute Review
 
-Apply the relevant checklist from [review-checklist.md](./review-checklist.md).
+Apply the relevant checklist from [review-checklist.md](./references/review-checklist.md).
 
 For re-reviews, structure output as:
 

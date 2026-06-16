@@ -1,6 +1,9 @@
 ---
 name: forge-implement
 description: Implement code from IMPL-PLAN.md. Use when implementing features, writing code from plan, or in phase 8 of forge workflow.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Code Implementation
@@ -57,7 +60,7 @@ Tier 3 (depends on Tier 2): Unit D — sequential after Tier 2
 - Tier has >1 independent unit → parallelize (use subagents if orchestrated)
 - Tier has 1 unit → sequential
 - All units sequential → no parallelism
-- Log the decision in FORGE-LOGS.md
+- Record the parallelism decision in `.phase-8-output.json` (decisions[]); the orchestrator regenerates FORGE-LOGS.md from state
 
 Output the execution plan:
 ```
@@ -79,7 +82,7 @@ For each unit, in tier order:
    - Pass → unit done
    - Fail → fix in-place, re-run (max 2 attempts)
    - Still failing → mark unit as blocked, log reason, continue to next unit
-5. Update FORGE-LOGS.md with unit completion
+5. Record unit completion in `.phase-8-output.json` (the orchestrator regenerates FORGE-LOGS.md from state; this skill does not write FORGE-LOGS.md or state.json directly)
 
 If the plan doesn't work as written (runtime issue, API mismatch, missing dependency):
 - **Minor deviation** (naming, parameter order, extra helper): adapt and document
@@ -197,7 +200,7 @@ When running under forge-autopilot with subagents:
 6. **Unit Local Quality Gate Fails (Max Retries):**
    - If a unit fails local quality gate after 2 fix attempts
    - **Action:** WARN: "Unit {{ unit_name }} failed local quality gate after 2 attempts. Marking as blocked. Reason: {{ reason }}"
-   - **Recovery:** Document; continue to next unit; log in FORGE-LOGS.md
+   - **Recovery:** Document; continue to next unit; record the blocked unit in `.phase-8-output.json` (orchestrator regenerates FORGE-LOGS.md)
 
 7. **Major Deviation from Plan:**
    - If implementation significantly deviates from IMPL-PLAN.md (different algorithm, restructured logic)

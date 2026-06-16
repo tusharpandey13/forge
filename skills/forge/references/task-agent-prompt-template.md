@@ -80,11 +80,11 @@ Expected length: {{ expected_length_lines }} lines
 | `feature_name` | string | "Authentication Middleware" | orchestrator (from state.json) | User-friendly feature name |
 | `phase_number` | int | 2 | orchestrator | Integer 1-12 |
 | `phase_name` | string | "Design Creation" | orchestrator (from phase table) | Standard phase name per DESIGN.md |
-| `feature_dir` | string | `/Users/alice/project/.forge/features/auth-middleware` | orchestrator (absolute path to feature root) | **ABSOLUTE path** — no trailing slash. Resolved by orchestrator before dispatch. Example shows real filesystem path. |
-| `config_path` | string | `/Users/alice/project/.forge/FORGE-CONFIG.md` | orchestrator | **ABSOLUTE path** to project config. Resolved at dispatch time. |
+| `feature_dir` | string | `/path/to/project/.forge/features/auth-middleware` | orchestrator (absolute path to feature root) | **ABSOLUTE path** — no trailing slash. Resolved by orchestrator before dispatch. Example shows real filesystem path. |
+| `config_path` | string | `/path/to/project/.forge/FORGE-CONFIG.md` | orchestrator | **ABSOLUTE path** to project config. Resolved at dispatch time. |
 | `skill_name` | string | "forge-design-creation" | orchestrator (from phase table) | Skill ID for reference |
-| `input_artifacts` | array of objects | `[{role: "Requirements", path: "/Users/alice/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md", description: "Feature requirements"}]` | orchestrator (computed from state.json) | **All paths ABSOLUTE and resolved at dispatch time.** Computed from dependency graph. |
-| `output_path` | string | `/Users/alice/project/.forge/features/auth-middleware/design/DESIGN.md` | orchestrator (from skill config + resolved) | **ABSOLUTE path** — where task agent writes output. Resolved at dispatch time. |
+| `input_artifacts` | array of objects | `[{role: "Requirements", path: "/path/to/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md", description: "Feature requirements"}]` | orchestrator (computed from state.json) | **All paths ABSOLUTE and resolved at dispatch time.** Computed from dependency graph. |
+| `output_path` | string | `/path/to/project/.forge/features/auth-middleware/design/DESIGN.md` | orchestrator (from skill config + resolved) | **ABSOLUTE path** — where task agent writes output. Resolved at dispatch time. |
 | `output_format` | string | "Markdown" | skill config | File format (always "Markdown" for Phase 1-12) |
 | `expected_sections` | array | `["Overview", "Architecture", "Components"]` | skill config | Required sections in output artifact |
 | `expected_length_lines` | string | "300-500" | skill config | Range in lines (e.g., "200-400") |
@@ -103,21 +103,21 @@ You are a Forge phase executor for Auth Middleware — Phase 1: Requirement Anal
 
 ## Context
 
-Feature directory: /project/.forge/features/auth-middleware
-Configuration: /project/.forge/FORGE-CONFIG.md
+Feature directory: /path/to/project/.forge/features/auth-middleware
+Configuration: /path/to/project/.forge/FORGE-CONFIG.md
 Skill: forge-requirement-analysis
 
 ## Input Artifacts
 
-- **Context Files**: /project/.forge/features/auth-middleware/context/
+- **Context Files**: /path/to/project/.forge/features/auth-middleware/context/
   Description: User-provided PRDs, specs, issues, Confluence exports
 
-- **Config**: /project/.forge/FORGE-CONFIG.md
+- **Config**: /path/to/project/.forge/FORGE-CONFIG.md
   Description: Project conventions and constraints
 
 ## Output Artifact
 
-Write to: /project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
+Write to: /path/to/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
 Format: Markdown (.md)
 Expected sections: Overview, Functional Requirements, Non-Functional Requirements, Constraints, Edge Cases, Dependencies, Out of Scope, Acceptance Criteria
 Expected length: 200-400 lines
@@ -138,7 +138,7 @@ Expected length: 200-400 lines
 
 ## Key Constraints
 
-- Write ONLY to /project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
+- Write ONLY to /path/to/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
 - Do NOT propose solutions or architecture (that's Phase 2)
 - Do NOT make assumptions without asking clarifying questions
 - Do NOT modify input files or configuration
@@ -169,28 +169,28 @@ You are a Forge phase executor for Auth Middleware — Phase 2: Design Creation.
 
 ## Context
 
-Feature directory: /project/.forge/features/auth-middleware
-Configuration: /project/.forge/FORGE-CONFIG.md
+Feature directory: /path/to/project/.forge/features/auth-middleware
+Configuration: /path/to/project/.forge/FORGE-CONFIG.md
 Skill: forge-design-creation
 
 ## Input Artifacts
 
-- **Requirements**: /project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
+- **Requirements**: /path/to/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
   Description: Feature requirements, scope, acceptance criteria
 
 - **Codebase**: (read-only access to project source for patterns and existing implementations)
 
-- **Config**: /project/.forge/FORGE-CONFIG.md
+- **Config**: /path/to/project/.forge/FORGE-CONFIG.md
   Description: Project conventions and architecture patterns
 
 ## Output Artifacts
 
-Primary: /project/.forge/features/auth-middleware/design/DESIGN.md
+Primary: /path/to/project/.forge/features/auth-middleware/design/DESIGN.md
   Format: Markdown (.md)
   Expected sections: Overview, Solution Approach, Components, Architecture, Data Flow, Error Handling, Test Matrix, Design Decisions
   Expected length: 400-700 lines
 
-Auxiliary: /project/.forge/features/auth-middleware/design/design-artifact-*.md
+Auxiliary: /path/to/project/.forge/features/auth-middleware/design/design-artifact-*.md
   (Create as needed for research on design decisions)
   Examples: design-artifact-auth-strategy.md, design-artifact-cache-layer.md
 
@@ -245,24 +245,24 @@ You are a Forge phase executor for Auth Middleware — Phase 3: Design Review.
 
 ## Context
 
-Feature directory: /project/.forge/features/auth-middleware
-Configuration: /project/.forge/FORGE-CONFIG.md
+Feature directory: /path/to/project/.forge/features/auth-middleware
+Configuration: /path/to/project/.forge/FORGE-CONFIG.md
 Skill: forge-design-review
 
 ## Input Artifacts
 
-- **Design**: /project/.forge/features/auth-middleware/design/DESIGN.md
+- **Design**: /path/to/project/.forge/features/auth-middleware/design/DESIGN.md
   Description: Technical design document to review
 
-- **Requirements**: /project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
+- **Requirements**: /path/to/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
   Description: Feature requirements and acceptance criteria
 
-- **Config**: /project/.forge/FORGE-CONFIG.md
+- **Config**: /path/to/project/.forge/FORGE-CONFIG.md
   Description: Project conventions and quality standards
 
 ## Output Artifact
 
-Write to: /project/.forge/features/auth-middleware/design/DESIGN-REVIEW-1.md
+Write to: /path/to/project/.forge/features/auth-middleware/design/DESIGN-REVIEW-1.md
 Format: Markdown (.md)
 Expected sections: Overview, Review Findings (by severity), Design Decision Validation, Recommendations, Gate Status
 Expected length: 150-300 lines
@@ -290,7 +290,7 @@ Expected length: 150-300 lines
 
 ## Key Constraints
 
-- Write ONLY to /project/.forge/features/auth-middleware/design/DESIGN-REVIEW-1.md
+- Write ONLY to /path/to/project/.forge/features/auth-middleware/design/DESIGN-REVIEW-1.md
 - Do NOT modify DESIGN.md (output is review only)
 - Do NOT propose implementation changes (out of scope for design review)
 - Read-only access to design and requirements
@@ -316,26 +316,26 @@ You are a Forge phase executor for Auth Middleware — Phase 4: Implementation P
 
 ## Context
 
-Feature directory: /project/.forge/features/auth-middleware
-Configuration: /project/.forge/FORGE-CONFIG.md
+Feature directory: /path/to/project/.forge/features/auth-middleware
+Configuration: /path/to/project/.forge/FORGE-CONFIG.md
 Skill: forge-implementation-planning
 
 ## Input Artifacts
 
-- **Design**: /project/.forge/features/auth-middleware/design/DESIGN.md
+- **Design**: /path/to/project/.forge/features/auth-middleware/design/DESIGN.md
   Description: Technical design and architecture
 
-- **Requirements**: /project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
+- **Requirements**: /path/to/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md
   Description: Feature requirements and acceptance criteria
 
 - **Codebase**: (read-only access for conventions and existing patterns)
 
-- **Config**: /project/.forge/FORGE-CONFIG.md
+- **Config**: /path/to/project/.forge/FORGE-CONFIG.md
   Description: Project conventions and implementation patterns
 
 ## Output Artifact
 
-Write to: /project/.forge/features/auth-middleware/plan/IMPL-PLAN.md
+Write to: /path/to/project/.forge/features/auth-middleware/plan/IMPL-PLAN.md
 Format: Markdown (.md)
 Expected sections: Overview, Codebase Analysis, Implementation Units (with Tier ordering), Configuration & Constants, File Changes Summary, Integration Points, Risks & Mitigations
 Expected length: 500-800 lines
@@ -356,7 +356,7 @@ Expected length: 500-800 lines
 
 ## Key Constraints
 
-- Write ONLY to /project/.forge/features/auth-middleware/plan/IMPL-PLAN.md
+- Write ONLY to /path/to/project/.forge/features/auth-middleware/plan/IMPL-PLAN.md
 - Do NOT write actual implementation code (pseudocode only)
 - Do NOT leave pseudocode ambiguous
 - Pseudocode detailed enough for line-by-line review
@@ -479,11 +479,11 @@ END FUNCTION
 
 ## Related Files & References
 
-- **Orchestrator Skill:** `/Users/tushar.pandey/src/forge/skills/forge/SKILL.md` (uses this template)
-- **Phase Skills:** `skills/forge-{phase-name}/SKILL.md` (provide phase-specific instructions and quality gates)
-- **State Schema:** `.forge/state.json` (source of feature metadata, artifact paths)
-- **Design Document:** `/Users/tushar.pandey/src/forge/forge/design/DESIGN.md` (section: "Task Agent Prompt Format")
-- **Implementation Plan:** `/Users/tushar.pandey/src/forge/forge/plan/IMPL-PLAN.md` (Unit 5: Task Agent Prompt Template)
+- **Orchestrator Skill:** skills/forge/SKILL.md (uses this template)
+- **Phase Skills:** skills/forge-{phase-name}/SKILL.md (provide phase-specific instructions and quality gates)
+- **State Schema:** .forge/state.json (source of feature metadata, artifact paths)
+- **Design Document:** Project architecture documentation
+- **Implementation Plan:** Project development plan
 
 ---
 

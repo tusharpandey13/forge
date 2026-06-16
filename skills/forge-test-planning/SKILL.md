@@ -1,6 +1,9 @@
 ---
 name: forge-test-planning
 description: Create test plan from implementation plan. Use when planning tests, creating test matrix, or working with IMPL-PLAN.md.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Test Planning
@@ -123,7 +126,7 @@ Write `.phase-6-output.json` sidecar (full absolute path provided by orchestrato
 
 ## Deliverables
 
-- `{feature_dir}/plan/TEST-PLAN.md` — use [TEST-PLAN-template.md](./TEST-PLAN-template.md)
+- `{feature_dir}/plan/TEST-PLAN.md` — use [test-plan-template.md](./references/test-plan-template.md)
 
 ## Quality Checks
 

@@ -1,6 +1,9 @@
 ---
 name: forge-requirement-analysis
 description: Extract feature specs from context files. Use when analyzing requirements, gathering requirements, or working with context files.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Requirement Analysis
@@ -62,7 +65,7 @@ Continue asking questions until requirements are complete and unambiguous.
 
 ### 6. Document
 
-Create formal requirements document using the [REQUIREMENTS-template.md](./REQUIREMENTS-template.md).
+Create formal requirements document using the [requirements-template.md](./references/requirements-template.md).
 
 Output: `{feature_dir}/requirement/REQUIREMENTS.md`
 - **Variable form (from orchestrator):** `{feature_dir}/requirement/REQUIREMENTS.md`

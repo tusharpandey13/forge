@@ -1,6 +1,9 @@
 ---
 name: forge-implement-tests
 description: Implement tests from TEST-PLAN.md. Use when writing tests from plan, implementing test code, or in phase 10 of forge workflow.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Test Implementation
@@ -83,7 +86,7 @@ For each suite:
    - Fail → diagnose: test bug vs. source bug
      - Test bug → fix test, re-run (max 2 attempts)
      - Source bug → log finding, continue (code review should have caught this)
-6. Update FORGE-LOGS.md with suite completion
+6. Record suite completion in `.phase-10-output.json` (the orchestrator regenerates FORGE-LOGS.md from state; this skill does not write FORGE-LOGS.md or state.json directly)
 
 ### 5. Full Quality Gate
 

@@ -1,11 +1,9 @@
 ---
 name: forge-migrate
-type: skill
-description: Migrate existing forge projects from old artifact structure to new state.json model with feature namespacing
-tier: 2
-depends_on: state-schema
-status: documentation
-tags: ["migration", "backward-compatibility", "initialization"]
+description: Migrate existing forge projects from old artifact structure to new state.json model with feature namespacing. Use when running /forge on a project with old forge/ directory.
+license: Proprietary
+metadata:
+  author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
 # Forge Migrate
