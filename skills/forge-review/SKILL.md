@@ -57,6 +57,18 @@ If this is a re-review (N > 1):
 
 Apply the relevant checklist from [review-checklist.md](./references/review-checklist.md).
 
+**For Code Review (Phase 9) and Test Review (Phase 11):**
+- **Before marking any finding CRITICAL or MAJOR:** Apply Surface-Aware Finding Verification (see ../forge/references/verification-protocol.md#protocol-c):
+  - Classify code location: PUBLIC, INTERNAL, or TEST surface
+  - If INTERNAL or TEST: reproduce finding against PUBLIC surface; if not reproducible, downgrade to MINOR
+  - Cite reproduction evidence in finding documentation
+- **For Test Review specifically (Phase 11):** Apply Tautology Heuristic (see ../forge/references/verification-protocol.md#protocol-b) when reviewing test code:
+  - [ ] Tests have real assertions (not zero assertions)
+  - [ ] Assertions are meaningful (not bare constants)
+  - [ ] Tests don't assert only on mock configuration
+  - [ ] Snapshot-only tests also have behavioral assertions
+  - Tests failing heuristic should be flagged as MAJOR if in scope
+
 For re-reviews, structure output as:
 
 ```markdown
@@ -119,6 +131,8 @@ Write `.phase-{{ PHASE_NUM }}-output.json` with review_findings for orchestrator
 
 ### [CRITICAL] Issue Title
 - Location: [file/section reference]
+- Surface: [PUBLIC/INTERNAL/TEST — where issue occurs]
+- Reproduction: [how to reproduce on public API surface, if not public code itself]
 - Impact: [what breaks if not fixed]
 - Fix: [specific action to resolve]
 
