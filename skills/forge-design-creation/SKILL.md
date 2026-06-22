@@ -40,13 +40,36 @@ FORGE :: DESIGN CREATION
 Read .forge/state.json. Confirm Phase 1 (Requirements) status is "completed" or "approved".
 Read FORGE-CONFIG.md for conventions and paths.
 
+**Capability check.** Phase 1 (requirement analysis) runs a capability preflight; design adds the design-specific checks. Detect what is available before designing, and state what you can and cannot verify:
+- `gh` CLI present and authed (`gh auth status`)? Needed to verify SDK/method names against live repos.
+  - **Private/internal repo not accessible?** Auth0 SDK repos are often org-internal. If `gh auth status` lists a work account (username/email contains `_atko` or `@okta`), `gh auth switch` to it and retry. If only a personal account is logged in, ask the user to `gh auth login` the work account rather than guessing names blind.
+- Required source/context docs readable at their paths?
+- If something is missing, consult the **Degradation Table** below, state the impact, annotate gaps visibly in the design, and proceed in degraded mode rather than failing.
+
+**Degradation Table** — annotate gaps; never fill them with guesses:
+
+| Missing | Fallback | Mark in DESIGN.md |
+|---------|----------|-------------------|
+| `gh` CLI / live-repo access | Use codebase + convention docs only | "names unverified against live repos" |
+| Private/internal repo access | `gh auth switch` to `_atko`/`@okta` work account; if absent, ask user to `gh auth login` | — |
+| A linked source/context doc | Ask the user to paste it; proceed offline | mark the dependent section "source unavailable, proposed" |
+| Codebase unreadable | Design from requirements + architectural guidelines | "design not validated against existing code" |
+
 ### 2. Review Requirements
 
 Understand every FR and NFR in REQUIREMENTS.md.
 
+**Multi-source reconcile (mini-gate).** When the inputs include more than one source (REQUIREMENTS.md plus supporting requirement docs, original context docs, PRD/RFD/spec, or a PoC), the sources **will** disagree. Before designing:
+- List every cross-doc contradiction (contract/endpoint naming, error codes/format, parameter naming, defaults/required-ness, scope, behavioral semantics).
+- **Flag every conflict; never silently pick a winner.** For each: the value per source (name the doc), and a recommended resolution with reasoning.
+- Present the conflict list + open questions and stop for the user to resolve or defer.
+- Single consistent source → skip; note "single source, no reconciliation needed."
+
 ### 3. Analyze Codebase
 
 Study existing architecture, patterns, and similar implementations.
+
+**Verify names against live code.** Existing-codebase conventions drift; a convention doc or prior memory is a starting point, not truth. Every method/type/parameter name you reuse or extend must be verified against the actual current source (read the file, or `gh`-search the live repo for SDK work). Do not trust a remembered or documented signature without confirming it exists as written.
 
 ### 4. Identify Design Decisions
 
@@ -107,7 +130,7 @@ DESIGN.md is a **stakeholder-facing reference document** read by SEs, PMs, and E
 
 With user's DD choices, create the full design:
 
-1. Define public contracts:
+1. Define public contracts (every reused/extended name **verified against live code** per step 3, not from memory):
    - Types and interfaces (real target-language code, e.g. TypeScript)
    - Methods and functions (signatures, behavior, errors)
    - Error types (codes, conditions, recovery)
@@ -225,7 +248,7 @@ Write `.phase-2-output.json` sidecar in `{feature_dir}/`:
 - NFRs addressed with measurable targets
 - Test matrix is exhaustive (happy + error + edge)
 - Design decisions documented with rationale
-- No actual implementation code (pseudocode only)
+- Contracts use real target-language code (per Authoring Standards); not full implementations — focus on what changes
 - Wire formats complete for all network calls
 - Error types and handling strategy defined
 - Breaking changes identified with migration paths
@@ -278,13 +301,16 @@ Write `.phase-2-output.json` sidecar in `{feature_dir}/`:
    - **Action:** WARN: "Unresolved items in design: {{ list }}. Escalating for user clarification."
    - **Recovery:** List specific locations; ask for guidance before finalizing
 
-## Anti-Patterns
+## Common Mistakes
 
-- Do NOT write actual implementation code
-- Do NOT skip the test matrix
-- Do NOT assume implementation details without analyzing codebase
-- Do NOT make design decisions silently — present options to user when multiple viable approaches exist
-- Do NOT silently fail — report all errors with clear context
+- **Writing full implementations.** Contracts use real target-language code, but show the *surface* (signatures, types, what changes) — not every line of the implementation.
+- **Trusting remembered/documented names.** Verify every reused method/type/parameter name against live code (`gh`-search for SDK work). Conventions drift.
+- **Silently resolving a source conflict.** When inputs disagree, surface every conflict at the reconcile mini-gate; let the user decide.
+- **Inventing content for a missing source.** Degrade and annotate per the Degradation Table; never guess.
+- **Skipping the test matrix.**
+- **Making design decisions silently.** Present options when multiple viable approaches exist.
+- **Silent failure.** Report all errors with clear context.
+- **Leaking internal scaffolding.** Run the leak scan (Authoring Standards) before finishing.
 
 ## Handoff
 
