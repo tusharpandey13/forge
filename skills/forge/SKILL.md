@@ -47,7 +47,7 @@ FORGE_BIN="<skill_dir>/bin/forge"
 
 Invocation pattern: `$FORGE_BIN <verb> [args...]`
 
-Available verbs: `init` | `status` | `slice` | `merge` | `save` | `mark-complete` | `invalidate-downstream` | `repair` | `ref` | `archive` | `ghost-snapshot` | `ghost-diff` | `ghost-guard` | `commit-phase` | `log-query` | `rollback` | `metadata` | `autowrite-phase` | `cascade-fix`
+Available verbs: `init` | `status` | `slice` | `merge` | `save` | `mark-complete` | `invalidate-downstream` | `repair` | `ref` | `archive` | `ghost-snapshot` | `ghost-diff` | `ghost-guard` | `commit-phase` | `log-query` | `rollback` | `metadata` | `autowrite-phase` | `cascade-fix` | `resume`
 
 Never invoke `bin/lib/*.sh` directly. Workers never read `state.json` directly — only via `forge slice` / `forge ref`.
 
@@ -55,6 +55,11 @@ Never invoke `bin/lib/*.sh` directly. Workers never read `state.json` directly �
 
 - **Bare `/forge`** (no verb): run `forge status`, then proceed to Step 3 (nudge).
 - **`/forge <verb>`** (rollback, cascade-fix, etc.): skip decorative timeline, go straight to the action.
+- **Continue/resume intent** — user says "continue/resume/pick up/keep working on \<feature\>" (any phrasing naming a past feature, active OR completed): run `forge resume "<feature words>"`. It fuzzy-matches the feature across ALL statuses and prints status, last carry_forward, open todos, and a suggested next action. Act on that:
+  - If it resolves to an ACTIVE feature with a pending phase → resume at that phase.
+  - If it resolves to a COMPLETED feature with open todos → surface the todos and offer to start a follow-up feature seeded with them (do NOT silently reactivate a completed feature).
+  - If ambiguous (multiple candidates printed) → ask the user which slug.
+  This is the path for "let's continue X" — never make the user hand-run scripts or pass state paths.
 
 Determine invocation mode before Step 0.
 
