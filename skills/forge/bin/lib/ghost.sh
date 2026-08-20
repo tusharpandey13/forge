@@ -80,6 +80,8 @@ cmd_ghost_snapshot() {
 
   # Skeleton exclude patterns (build junk; .env intentionally absent = kept)
   cat > "$tmp_exclude" <<'EXCLUDEOF'
+.forge/
+.git/
 node_modules/
 target/
 dist/
