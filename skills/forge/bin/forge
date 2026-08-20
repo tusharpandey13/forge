@@ -22,6 +22,10 @@
 #                              Commit phase to .forge git (replaces FORGE-LOGS.md)
 #   log-query [--feature <slug>] [--phase N]  Reconstruct audit from .forge git log
 #   rollback <slug> <N> [--tree-restore]  Rollback forge state to phase N
+#   metadata set <slug> <phase> "<note>"  Attach optional note to phase (stored in NN.json bulk)
+#   metadata get <slug> [--todos]         Retrieve notes across feature phases
+#   metadata migrate-learnings [--state <f>]  Move learnings from state.json → learnings.json
+#   autowrite-phase <slug> <phase>        Convenience: merge+mark-complete+commit-phase in one
 #
 # OUTPUT:
 #   --json   Emit structured JSON on stdout (default: human-readable text)
@@ -116,7 +120,13 @@ case "$verb" in
   rollback)
     exec "${FORGE_LIB_DIR}/rollback.sh" "$verb" "$@"
     ;;
+  metadata)
+    exec "${FORGE_LIB_DIR}/metadata.sh" "$verb" "$@"
+    ;;
+  autowrite-phase)
+    exec "${FORGE_LIB_DIR}/autowrite.sh" "$verb" "$@"
+    ;;
   *)
-    forge_error "unknown verb '${verb}'. Valid verbs: init status slice merge save mark-complete invalidate-downstream repair ref archive ghost-snapshot ghost-diff ghost-guard commit-phase log-query rollback"
+    forge_error "unknown verb '${verb}'. Valid verbs: init status slice merge save mark-complete invalidate-downstream repair ref archive ghost-snapshot ghost-diff ghost-guard commit-phase log-query rollback metadata autowrite-phase"
     ;;
 esac
