@@ -15,6 +15,13 @@
 #   repair  [<state-file>]     Scan index for dangling refs + orphan NN.json files
 #   ref     <feat> <name> [--print]  Deref a ref envelope (prints locator or content)
 #   archive <slug>             Move terminal feature bulk → archive.json, leave stub
+#   ghost-snapshot <slug>      Snapshot project working tree → forge-ghost/<slug> branch
+#   ghost-diff <slug> <sha1> <sha2>  Diff between two ghost SHAs in project repo
+#   ghost-guard install        Install pre-push hook refusing forge-ghost/* refs
+#   commit-phase <slug> <N> <status> [--log-line "..."] [--carry "..."] [--ghost-sha <sha>]
+#                              Commit phase to .forge git (replaces FORGE-LOGS.md)
+#   log-query [--feature <slug>] [--phase N]  Reconstruct audit from .forge git log
+#   rollback <slug> <N> [--tree-restore]  Rollback forge state to phase N
 #
 # OUTPUT:
 #   --json   Emit structured JSON on stdout (default: human-readable text)
@@ -100,7 +107,16 @@ case "$verb" in
   archive)
     exec "${FORGE_LIB_DIR}/archive.sh" "$verb" "$@"
     ;;
+  ghost-snapshot|ghost-diff|ghost-guard)
+    exec "${FORGE_LIB_DIR}/ghost.sh" "$verb" "$@"
+    ;;
+  commit-phase|log-query)
+    exec "${FORGE_LIB_DIR}/commit.sh" "$verb" "$@"
+    ;;
+  rollback)
+    exec "${FORGE_LIB_DIR}/rollback.sh" "$verb" "$@"
+    ;;
   *)
-    forge_error "unknown verb '${verb}'. Valid verbs: init status slice merge save mark-complete invalidate-downstream repair ref archive"
+    forge_error "unknown verb '${verb}'. Valid verbs: init status slice merge save mark-complete invalidate-downstream repair ref archive ghost-snapshot ghost-diff ghost-guard commit-phase log-query rollback"
     ;;
 esac
