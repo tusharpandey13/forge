@@ -8,115 +8,102 @@ metadata:
 
 # Requirement Analysis
 
-Domain expert for extracting complete feature specifications from initial context. The USER is the domain expert with access to Confluence, Slack, and tribal knowledge.
+Domain expert for extracting complete feature specs from initial context. USER is the domain expert with Confluence/Slack/tribal knowledge access.
 
 ## When to Use
 
 - User asks to analyze or gather requirements
 - User references context files
-- Starting a new feature that needs requirement documentation
+- Starting new feature needing requirement documentation
 
 ## Context Sources
 
 - `.forge/FORGE-CONFIG.md` — paths, conventions (if exists)
 - `.forge/state.json` — current state (if exists)
 - `{context-dir}/*.md` — user-provided external context (PRDs, Confluence exports, issues)
-  - **Example:** `/Users/alice/project/.forge/features/auth-middleware/context/PRD.md`
 - Codebase structure and existing patterns
-- Any symlinked directories in the workspace
+- Symlinked directories in workspace
 
-**NOTE:** The `{feature_dir}` variable is resolved by the orchestrator to an absolute path before dispatch. Examples throughout this skill show both the variable form and concrete paths.
+See references/shared-phase-spec.md § feature-dir-note
 
 ## Process
 
-**MANDATORY FIRST OUTPUT:**
-```
-FORGE :: REQUIREMENT ANALYSIS
-```
+See references/shared-phase-spec.md § mandatory-first-output — emit `FORGE :: REQUIREMENT ANALYSIS`
 
 ### 0. Check Config
 
-If `.forge/FORGE-CONFIG.md` does not exist, run the config initialization flow (see forge orchestrator skill) before proceeding. This ensures paths and conventions are established.
-
-Read FORGE-CONFIG.md for:
-- Context directory path
-- Artifact output paths
-- Project conventions (for understanding constraints)
+If `.forge/FORGE-CONFIG.md` absent → run config init flow (see forge orchestrator). Read for:
+- Context dir path, artifact output paths, project conventions
 
 ### 1. Parse Context
 
-Read all files in the context directory thoroughly.
+Read all context dir files thoroughly.
 
 ### 2. Analyze Codebase
 
-Identify related patterns, existing implementations, and conventions.
+Identify related patterns, existing implementations, conventions.
 
 ### 3. Identify Gaps
 
-Find missing constraints, unclear scope, undefined behaviors, edge cases.
+Find: missing constraints, unclear scope, undefined behaviors, edge cases.
 
 ### 4. Ask Clarifying Questions
 
-Generate 5-10 specific questions for the user. They have Confluence/Slack access and domain knowledge.
+Generate 5–10 specific questions. User has Confluence/Slack + domain knowledge.
 
 ### 5. Iterate
 
-Continue asking questions until requirements are complete and unambiguous.
+Continue until requirements are complete and unambiguous.
 
 ### 5a. GATE 1: Capability Preflight
 
-Before documenting requirements, **enumerate every action the feature will likely need that the agent cannot perform directly**. For each blockers, emit exact copy-paste manual commands/handoffs for the user up front:
+Before documenting requirements, enumerate every action the feature needs that the agent cannot perform directly. Emit exact copy-paste manual commands/handoffs up front for:
 
 - Interactive SSH/terminals
-- External writes (CLI tenant config, cloud provider tenants, third-party SaaS settings)
-- Network mutations (POST/PUT to external APIs, configuration writes)
+- External writes (CLI tenant config, cloud provider tenants, third-party SaaS)
+- Network mutations (POST/PUT to external APIs, config writes)
 - MCP servers that may be disconnected or unavailable
 - Cloud/SaaS APIs requiring manual setup (auth, permissions, credentials)
-- Privileged operations (sudo, elevated access)
+- Privileged ops (sudo, elevated access)
 
-**Checklist:**
-- [ ] All external APIs and services identified
+Checklist:
+- [ ] All external APIs/services identified
 - [ ] Each blocked action has exact manual command or handoff step
 - [ ] Commands include error recovery guidance
 - [ ] User can copy/paste each command without modification
-- [ ] Capability scan recorded in requirements output (see Output below)
+- [ ] Capability scan recorded in requirements output
 
-**Frame:** Surface blockers at the start, plan a clean manual handoff, never stall mid-task.
+Surface blockers at start → plan clean manual handoff → never stall mid-task.
 
 ### 5b. GATE 2: Verify-Before-Claim Preflight
 
-Add a hard rule: **before asserting any negative about environment/state** ("repo missing", "X not supported", "file absent", "tool unavailable"), verify the obvious cause first and cite the command output.
+Before asserting any negative about environment/state ("repo missing", "X not supported", "file absent", "tool unavailable") → verify obvious cause first, cite command output.
 
-**Checklist:**
+Checklist:
 - [ ] No unverified claims about repo state, tool availability, or file absence
-- [ ] For any negative assertion: check active git/gh account (`git config user.email`, `gh auth status`)
-- [ ] For env state: verify env vars are set (e.g., `echo $ENV_VAR`)
-- [ ] For file/path claims: verify actual path and permissions (`ls -la`, `find`)
-- [ ] For tool unavailability: confirm tool is installed and in PATH (`which`, `<tool> --version`)
-- [ ] For migration targets, abbreviations, conventions: verify against config or codebase; if unknown, ask or verify, don't guess
-- [ ] Every negative claim includes command output in clarifying questions or requirements
+- [ ] Negative assertion → check active git/gh account (`git config user.email`, `gh auth status`)
+- [ ] Env state → verify env vars (`echo $ENV_VAR`)
+- [ ] File/path claims → verify actual path and permissions (`ls -la`, `find`)
+- [ ] Tool unavailability → confirm installed and in PATH (`which`, `<tool> --version`)
+- [ ] Migration targets, abbreviations, conventions → verify against config or codebase; if unknown, ask
+- [ ] Every negative claim includes command output
 
-**Frame:** Unverified assumptions cause mid-task stalls and false negatives. Verify first, claim second.
+Unverified assumptions → mid-task stalls and false negatives. Verify first, claim second.
 
 ### 6. Document
 
-Create formal requirements document using the [requirements-template.md](./references/requirements-template.md).
+Create formal requirements using [requirements-template.md](./references/requirements-template.md).
 
 Output: `{feature_dir}/requirement/REQUIREMENTS.md`
-- **Variable form (from orchestrator):** `{feature_dir}/requirement/REQUIREMENTS.md`
-- **Concrete example:** `/Users/alice/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md`
+- Example: `/Users/alice/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md`
 
 ### 7. Self-Validate
 
-Re-read the artifact. Verify:
-- No `[placeholder]` or `TBD` text remains
-- All sections have content
-- Cross-reference IDs (FR-X, NFR-X) are consistent
-Fix any issues silently.
+See references/shared-phase-spec.md § self-validate. Also check: FR-X/NFR-X IDs consistent.
 
 ### 7a. Capability-Scan Output (Gate 1)
 
-If Gate 1 (Capability Preflight) identifies blocked actions, add a **Capability Constraints** section to REQUIREMENTS.md (before Acceptance Criteria or Out of Scope). Format:
+If Gate 1 finds blocked actions → add **Capability Constraints** section to REQUIREMENTS.md:
 
 ```
 ## Capability Constraints
@@ -125,118 +112,57 @@ The following actions are required but cannot be performed by the agent directly
 
 | Action | Constraint | Manual Command / Handoff |
 |--------|-----------|-------------------------|
-| (action) | (external system / blocked reason) | (exact copy-paste command or instructions) |
-| Example: Provision AWS IAM role | Cloud API mutation | `aws iam create-role --role-name ... --assume-role-policy-document ...` |
+| (action) | (external system / blocked reason) | (exact copy-paste command) |
 
-**Recovery:** User runs listed commands before feature handoff resumes. Agent will pause and provide explicit instructions at each gate.
+**Recovery:** User runs listed commands before feature handoff resumes.
 ```
 
 ### 8. Update State
 
-Write output artifact: `{feature_dir}/requirement/REQUIREMENTS.md`
+Write `.phase-1-output.json` sidecar (schema: see references/shared-phase-spec.md § sidecar-schema).
+Phase-specific decisions[] examples: "FR-1 scope clarified", "Key constraints identified"
 
-Write `.phase-1-output.json` sidecar (full absolute path provided by orchestrator):
-```json
-{
-  "phase": 1,
-  "status": "completed",
-  "artifacts": [
-    {
-      "path": "/Users/alice/project/.forge/features/auth-middleware/requirement/REQUIREMENTS.md",
-      "sha": "[git SHA of artifact]",
-      "size_bytes": [file size]
-    }
-  ],
-  "decisions": [
-    "FR-1 scope clarified",
-    "Key constraints identified"
-  ],
-  "execution_details": {
-    "model": "qc-readonly",
-    "reasoning_lines": [count],
-    "context_usage_percent": [%],
-    "elapsed_seconds": [duration]
-  }
-}
-```
-
-**Note:** The orchestrator provides the full output path for `.phase-1-output.json` in the task agent prompt. Example: `/Users/alice/project/.forge/features/auth-middleware/.phase-1-output.json`
-
-**Orchestrator updates state.json** (skill does NOT write to state.json directly)
-- Orchestrator reads .phase-1-output.json
-- Orchestrator updates state.json with artifacts, decisions, and execution details
-- Orchestrator commits to .forge git
+See references/shared-phase-spec.md § orchestrator-note
 
 ## Quality Checks
 
-- All template sections complete
-- No placeholder text remains
-- Constraints are explicit (performance, security, compatibility, data)
+- All template sections complete; no placeholder text
+- Constraints explicit (performance, security, compatibility, data)
 - Edge cases identified with expected behaviors
-- Acceptance criteria defined for each FR
-- Out of scope items clearly listed
+- Acceptance criteria per FR
+- Out-of-scope items listed
 - Dependencies identified with status
 
 ## Error Handling
 
 ### Before Starting
 
-1. **State.json Missing:**
-   - If `.forge/state.json` cannot be found or is invalid JSON
-   - **Action:** ERROR: "state.json missing or corrupted. Run /forge to initialize workspace first."
-   - **Recovery:** Do not proceed; return error to orchestrator
+See references/shared-phase-spec.md § error-cases (cases 1–3, 4/output).
 
-2. **State.json Invalid:**
-   - If `.forge/state.json` parses but has missing required fields
-   - **Action:** ERROR: "state.json is malformed (missing required fields: {{ missing_fields }})"
-   - **Recovery:** Return error to orchestrator for rollback
-
-3. **Active Feature Not Found:**
-   - If state.json exists but no feature has `is_active: true`
-   - **Action:** ERROR: "No active feature in state.json. Start a new feature or select one."
-   - **Recovery:** Return error; do not generate requirements
-
-4. **Config Not Found:**
-   - If `.forge/FORGE-CONFIG.md` is missing
-   - **Action:** Note in output: "FORGE-CONFIG.md not found; will attempt config detection"
-   - **Recovery:** Run config initialization flow; continue with best-effort detection
+Additional:
+- **Active Feature Not Found** — no `is_active: true` in state.json → ERROR: "No active feature in state.json. Start a new feature or select one." Do not generate requirements.
+- **Config Not Found** (case 3 for this phase) → note "FORGE-CONFIG.md not found; will attempt config detection"; run config init flow; continue best-effort.
 
 ### During Execution
 
-5. **Context Directory Not Found:**
-   - If specified context directory (from config) does not exist
-   - **Action:** WARN: "Context directory not found. Proceeding without external context."
-   - **Recovery:** Continue with codebase analysis only
-
-6. **Context Files Unreadable:**
-   - If files in context directory cannot be read (permissions, encoding)
-   - **Action:** WARN: "Could not read some context files: {{ list }}. Continuing with readable files."
-   - **Recovery:** Continue with available context
+- **Context dir not found** → WARN: "Context directory not found. Proceeding without external context." Continue codebase-only.
+- **Context files unreadable** → WARN: "Could not read some context files: {{ list }}." Continue with readable files.
 
 ### Before Completing
 
-7. **Output Path Not Writable:**
-   - If `.forge/features/<slug>/requirement/` directory cannot be created or written to
-   - **Action:** ERROR: "Cannot write to {{ output_path }}: {{ reason }}"
-   - **Recovery:** Return error; do not generate .phase-1-output.json
-
-8. **Placeholder Text Remains:**
-   - If REQUIREMENTS.md contains `[TBD]`, `[placeholder]`, or similar markers
-   - **Action:** WARN: "Placeholder text found in requirements. Replacing with structured TODOs or escalating."
-   - **Recovery:** Either resolve manually or escalate to user with specific locations
+- **Output not writable** → see § error-cases case 4
+- **Placeholder text remains** → WARN: "Placeholder text found. Replacing with structured TODOs or escalating."
 
 ## Anti-Patterns
 
 - Do NOT propose solutions or architecture
 - Do NOT include implementation details
-- Do NOT make assumptions without asking clarifying questions
-- Do NOT silently fail — report all errors with clear context
-- **Do NOT skip Gate 1 (Capability Preflight)** — enumerate external actions up front; emit manual commands; surface blockers before work starts
-- **Do NOT skip Gate 2 (Verify-Before-Claim Preflight)** — never assert negative claims without verifying obvious causes first (active account, env state, actual path/file); cite command output
-- Do NOT guess at repo state, migration targets, abbreviations, or conventions; verify or ask instead
+- Do NOT assume without asking clarifying questions
+- Do NOT silently fail
+- Do NOT skip Gate 1 — enumerate external actions up front
+- Do NOT skip Gate 2 — never assert negative claims without verifying first
 
 ## Handoff
 
 **Output:** `{feature_dir}/requirement/REQUIREMENTS.md` + `.phase-1-output.json`
-
 **Next Phase:** forge-design-creation

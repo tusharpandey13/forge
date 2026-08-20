@@ -18,21 +18,17 @@ Systematic review of design docs, implementation plans, test plans, or code chan
 
 ## Context Sources
 
-- `.forge/state.json` — feature metadata, prior review_findings, phase status
+- `.forge/state.json` — feature metadata, prior review_findings, phase status (via `forge slice`)
 - `.forge/FORGE-CONFIG.md` — conventions, paths
-- `.forge/features/<feature-slug>/` — feature directory with all phase artifacts
-  - **Example:** `/Users/alice/project/.forge/features/auth-middleware/`
+- `.forge/features/<feature-slug>/` — feature dir with all phase artifacts
 - The artifact being reviewed
 - Upstream artifacts (requirements for design, design for plan, etc.)
 
-**NOTE:** All artifact paths are absolute paths resolved by the orchestrator at dispatch time.
+See references/shared-phase-spec.md § feature-dir-note
 
 ## Process
 
-**MANDATORY FIRST OUTPUT:**
-```
-FORGE :: REVIEW
-```
+See references/shared-phase-spec.md § mandatory-first-output — emit `FORGE :: REVIEW`
 
 ### 1. Identify Review Type
 
@@ -45,32 +41,30 @@ Determine from context or user input:
 
 ### 2. Check for Prior Reviews
 
-Read `.forge/state.json` to find prior review rounds on this phase.
-Access `state.json.features[0].phases[PHASE_NUM].review_findings` to determine the review number (N). First review = 1.
+Use `forge slice` to get active feature state, then `forge ref <feat> <artifact>` to access prior review data. Determine review round N (first = 1).
 
-If this is a re-review (N > 1):
-- Read prior review artifact(s) from feature directory
+If re-review (N > 1):
+- Read prior review artifact(s) from feature dir
 - Verify previously reported CRITICAL/MAJOR findings are addressed
-- Start the new review with a resolution check
+- Start new review with resolution check
 
 ### 3. Execute Review
 
-Apply the relevant checklist from [review-checklist.md](./references/review-checklist.md).
+Apply relevant checklist from [review-checklist.md](./references/review-checklist.md).
 
 **For Code Review (Phase 9) and Test Review (Phase 11):**
-- **Before marking any finding CRITICAL or MAJOR:** Apply Surface-Aware Finding Verification (see ../forge/references/verification-protocol.md#protocol-c):
+- **Before marking CRITICAL or MAJOR:** Apply Surface-Aware Finding Verification (see ../forge/references/verification-protocol.md#protocol-c):
   - Classify code location: PUBLIC, INTERNAL, or TEST surface
-  - If INTERNAL or TEST: reproduce finding against PUBLIC surface; if not reproducible, downgrade to MINOR
+  - If INTERNAL or TEST: reproduce finding against PUBLIC surface; if not reproducible → downgrade to MINOR
   - Cite reproduction evidence in finding documentation
-- **For Test Review specifically (Phase 11):** Apply Tautology Heuristic (see ../forge/references/verification-protocol.md#protocol-b) when reviewing test code:
-  - [ ] Tests have real assertions (not zero assertions)
+- **For Test Review (Phase 11):** Apply Tautology Heuristic (see ../forge/references/verification-protocol.md#protocol-b):
+  - [ ] Tests have real assertions (not zero)
   - [ ] Assertions are meaningful (not bare constants)
   - [ ] Tests don't assert only on mock configuration
   - [ ] Snapshot-only tests also have behavioral assertions
-  - Tests failing heuristic should be flagged as MAJOR if in scope
+  - Tests failing heuristic → flag as MAJOR if in scope
 
-For re-reviews, structure output as:
-
+For re-reviews, structure output:
 ```markdown
 ## Resolution of Round [N-1] Findings
 - [CRITICAL] [Title] — Fixed / Not fixed / Partially fixed
@@ -82,21 +76,16 @@ For re-reviews, structure output as:
 
 ### 4. Write Review Artifact
 
-**File naming:** `{ARTIFACT}-REVIEW-{N}.md` under feature directory.
+Naming: `{ARTIFACT}-REVIEW-{N}.md` under feature dir.
 
-Examples (with new path structure and concrete absolute paths):
+Examples:
 - `/Users/alice/project/.forge/features/auth-middleware/design/DESIGN-REVIEW-1.md`
-- `/Users/alice/project/.forge/features/auth-middleware/design/DESIGN-REVIEW-2.md`
 - `/Users/alice/project/.forge/features/auth-middleware/plan/IMPL-PLAN-REVIEW-1.md`
-- `/Users/alice/project/.forge/features/auth-middleware/plan/TEST-PLAN-REVIEW-1.md`
 - `/Users/alice/project/.forge/features/auth-middleware/review/CODE-REVIEW-1.md`
-- `/Users/alice/project/.forge/features/auth-middleware/review/TEST-REVIEW-1.md`
-
-**(All paths are absolute, provided by orchestrator at dispatch time)**
 
 ### 5. Generate Phase Output
 
-Write `.phase-{{ PHASE_NUM }}-output.json` with review_findings for orchestrator integration:
+Write `.phase-{{ PHASE_NUM }}-output.json` with review_findings (schema: see references/shared-phase-spec.md § sidecar-schema):
 
 ```json
 {
@@ -111,10 +100,7 @@ Write `.phase-{{ PHASE_NUM }}-output.json` with review_findings for orchestrator
 }
 ```
 
-**IMPORTANT:**
-- Orchestrator reads this file and updates `state.json.phases[N].review_findings`
-- Do NOT update FORGE-LOGS.md or commit changes — orchestrator handles state updates and commits
-- Save output to absolute path provided by task agent (e.g., `/absolute/path/.phase-3-output.json`)
+See references/shared-phase-spec.md § orchestrator-note — do NOT update FORGE-LOGS.md or commit; orchestrator handles state updates.
 
 ## Output Format
 
@@ -131,19 +117,19 @@ Write `.phase-{{ PHASE_NUM }}-output.json` with review_findings for orchestrator
 
 ### [CRITICAL] Issue Title
 - Location: [file/section reference]
-- Surface: [PUBLIC/INTERNAL/TEST — where issue occurs]
-- Reproduction: [how to reproduce on public API surface, if not public code itself]
+- Surface: [PUBLIC/INTERNAL/TEST]
+- Reproduction: [how to reproduce on public API surface]
 - Impact: [what breaks if not fixed]
-- Fix: [specific action to resolve]
+- Fix: [specific action]
 
 ### [MAJOR] Issue Title
 - Location: [file/section reference]
 - Impact: [what is affected]
-- Fix: [specific action to resolve]
+- Fix: [specific action]
 
 ### [MINOR] Issue Title
 - Location: [file/section reference]
-- Fix: [specific action to resolve]
+- Fix: [specific action]
 
 ## Recommendations
 
@@ -154,7 +140,7 @@ Write `.phase-{{ PHASE_NUM }}-output.json` with review_findings for orchestrator
 ## Questions
 
 ### [QUESTION] What needs clarification
-- Context: [why this matters for the review]
+- Context: [why this matters]
 ```
 
 ## Severity Definitions
@@ -162,7 +148,7 @@ Write `.phase-{{ PHASE_NUM }}-output.json` with review_findings for orchestrator
 - **CRITICAL** — Blocks progress, causes failures, security issue. Must fix before proceeding.
 - **MAJOR** — Significant quality or correctness issue. Should fix before approval.
 - **MINOR** — Style, convention, minor improvement. Fix if time permits.
-- **SUGGESTION** — Optional enhancement. Consider for future.
+- **SUGGESTION** — Optional enhancement.
 
 ## Gate Rule
 
@@ -173,62 +159,32 @@ Any CRITICAL or MAJOR → FAIL (fix cycle required)
 
 ## Cascade Awareness
 
-If review reveals issues that affect earlier phases, note in the review:
-- "This finding may require changes to [upstream artifact]"
-- The orchestrator or user decides whether to trigger a rollback
+If review reveals issues affecting earlier phases → note: "This finding may require changes to [upstream artifact]". Orchestrator or user decides whether to trigger rollback.
 
 ## Error Handling
 
 ### Before Starting
 
-1. **State.json Missing or Invalid:**
-   - If `.forge/state.json` cannot be found or is corrupted
-   - **Action:** ERROR: "state.json missing or corrupted. Run /forge to reinitialize."
-   - **Recovery:** Do not proceed; return error
+See references/shared-phase-spec.md § error-cases (cases 1, 3, 4).
 
-2. **Artifact to Review Not Found:**
-   - If the target artifact file does not exist at expected path
-   - **Action:** ERROR: "Artifact not found at {{ artifact_path }}"
-   - **Recovery:** Return error; escalate to orchestrator
-
-3. **Upstream Artifact Missing:**
-   - If prerequisite artifacts (e.g., REQUIREMENTS.md for design review) not found
-   - **Action:** ERROR: "Cannot review {{ artifact_type }}: upstream artifact {{ upstream_artifact }} missing"
-   - **Recovery:** Return error; do not proceed without context
-
-4. **Config Not Found:**
-   - If `.forge/FORGE-CONFIG.md` missing
-   - **Action:** WARN: "FORGE-CONFIG.md not found. Using standard quality gates only."
-   - **Recovery:** Continue with default review standards
+- **Artifact to review not found** → ERROR: "Artifact not found at {{ artifact_path }}" Return error; escalate.
+- **Upstream artifact missing** → ERROR: "Cannot review {{ artifact_type }}: upstream artifact {{ upstream }} missing" Do not proceed without context.
+- Case 3 (Config not found) → WARN: "FORGE-CONFIG.md not found. Using standard quality gates only." Continue.
 
 ### During Execution
 
-5. **Prior Review Not Found (Re-review):**
-   - If state.json indicates this is a re-review but prior review artifact missing
-   - **Action:** WARN: "Prior review round not found. Starting fresh review."
-   - **Recovery:** Continue with new review; skip resolution check
-
-6. **Ambiguous or Unresolved Issues:**
-   - If artifact contains unresolved dependencies or unclear requirements
-   - **Action:** FLAG: "Issues identified that may be upstream: {{ list }}. Note for user/orchestrator."
-   - **Recovery:** Include in findings; flag for cascade consideration
+- **Prior review missing (re-review)** → WARN: "Prior review round not found. Starting fresh review." Skip resolution check.
+- **Ambiguous/unresolved issues** → FLAG: "Issues may be upstream: {{ list }}." Include in findings; flag for cascade.
 
 ### Before Completing
 
-7. **Output Path Not Writable:**
-   - If review artifact output path not writable
-   - **Action:** ERROR: "Cannot write review to {{ output_path }}: {{ reason }}"
-   - **Recovery:** Return error; do not complete review
-
-8. **Phase Output File Not Writable:**
-   - If `.phase-N-output.json` cannot be written
-   - **Action:** ERROR: "Cannot write phase output to {{ output_path }}: {{ reason }}"
-   - **Recovery:** Return error; escalate to orchestrator
+- **Output not writable** → see § error-cases case 4
+- **Phase output not writable** → ERROR: "Cannot write phase output to {{ output_path }}: {{ reason }}" Escalate.
 
 ## Anti-Patterns
 
 - Do NOT approve artifacts with unresolved CRITICAL or MAJOR findings
-- Do NOT review without reading upstream artifacts for context
+- Do NOT review without reading upstream artifacts
 - Do NOT invent requirements during review — flag missing coverage as findings
-- Do NOT conflate severity levels — be precise about impact
-- Do NOT silently fail — report all errors with full context
+- Do NOT conflate severity levels
+- Do NOT silently fail

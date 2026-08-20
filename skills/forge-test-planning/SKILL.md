@@ -19,36 +19,28 @@ Create exhaustive test plan from implementation plan and design test matrix. Der
 ## Context Sources
 
 - `.forge/FORGE-CONFIG.md` — test conventions, paths
-- `.forge/state.json` — current state, verify phase 5 approved
-- `{feature_dir}/plan/IMPL-PLAN.md` — implementation details (absolute path from orchestrator)
-  - **Example:** `/Users/alice/project/.forge/features/auth-middleware/plan/IMPL-PLAN.md`
+- `.forge/state.json` — current state (verify phase 5 approved)
+- `{feature_dir}/plan/IMPL-PLAN.md` — implementation details
 - `{feature_dir}/design/DESIGN.md` — original test matrix (baseline)
 - `{feature_dir}/requirement/REQUIREMENTS.md` — acceptance criteria
 - Existing test files in codebase — primary source for conventions
 
-**NOTE:** All artifact paths are absolute paths resolved by the orchestrator at dispatch time.
+See references/shared-phase-spec.md § feature-dir-note
 
 ## Process
 
-**MANDATORY FIRST OUTPUT:**
-```
-FORGE :: TEST PLANNING
-```
+See references/shared-phase-spec.md § mandatory-first-output — emit `FORGE :: TEST PLANNING`
 
 ### 1. Verify Prerequisites
 
-Read .forge/state.json. Confirm Phase 5 (Impl Plan Review) status is "approved".
-Read FORGE-CONFIG.md for test conventions and paths.
+Via `forge slice` — confirm Phase 5 (Impl Plan Review) status is "approved". Read FORGE-CONFIG.md for test conventions and paths.
 
 ### 2. Analyze Codebase Testing Conventions
 
 Verify FORGE-CONFIG.md test conventions against actual codebase:
 - Framework, file naming, directory structure
-- Mocking strategy: what libraries, what gets mocked, setup patterns
-- Fixture/factory patterns, setup/teardown conventions
-- Assertion style
-
-Update FORGE-CONFIG.md if new conventions discovered.
+- Mocking strategy: libraries, what gets mocked, setup patterns
+- Fixture/factory patterns, setup/teardown conventions, assertion style
 
 ### 3. Review Design Test Matrix
 
@@ -67,62 +59,28 @@ Add new test cases discovered from implementation analysis.
 Per function/method from impl plan:
 - Happy path and all error paths
 - Follow mocking conventions from config
-- Use language-agnostic pseudocode for test code
+- Language-agnostic pseudocode for test code
 
 ### 7. Plan Flow Tests
 
-- Blackbox approach: call real public methods
+- Blackbox: call real public methods
 - Mock only at boundaries the codebase already mocks
-- Test complete user flows
-- Minimize mocking
+- Test complete user flows; minimize mocking
 
 ### 8. Write Test Pseudocode
 
-Detailed setup, execution, and assertions for each test — using patterns from codebase conventions.
+Detailed setup, execution, assertions per test — using codebase convention patterns.
 
 ### 9. Self-Validate
 
-Re-read the artifact. Verify:
-- No `[placeholder]` or `TBD` text remains
-- All impl units have corresponding tests
-- All FRs mapped to tests in coverage table
-Fix any issues silently.
+See references/shared-phase-spec.md § self-validate. Also: all impl units have corresponding tests, all FRs mapped in coverage table.
 
 ### 10. Update State
 
-Write output artifact: `{feature_dir}/plan/TEST-PLAN.md`
-- **Variable form:** `{feature_dir}/plan/TEST-PLAN.md`
-- **Concrete example:** `/Users/alice/project/.forge/features/auth-middleware/plan/TEST-PLAN.md`
+Write `.phase-6-output.json` sidecar (schema: see references/shared-phase-spec.md § sidecar-schema).
+Phase-specific decisions[] examples: "Test suites: N unit, M flow", "Total test cases: K"
 
-Write `.phase-6-output.json` sidecar (full absolute path provided by orchestrator):
-```json
-{
-  "phase": 6,
-  "status": "completed",
-  "artifacts": [
-    {
-      "path": "{feature_dir}/plan/TEST-PLAN.md",
-      "sha": "[git SHA]",
-      "size_bytes": [size]
-    }
-  ],
-  "decisions": [
-    "Test suites: N unit, M flow",
-    "Total test cases: K"
-  ],
-  "execution_details": {
-    "model": "qc-readonly",
-    "reasoning_lines": [count],
-    "context_usage_percent": [%],
-    "elapsed_seconds": [duration]
-  }
-}
-```
-
-**Orchestrator updates state.json** (skill does NOT write to state.json directly)
-- Orchestrator reads .phase-6-output.json
-- Orchestrator updates state.json with artifacts
-- Orchestrator commits to .forge git
+See references/shared-phase-spec.md § orchestrator-note
 
 ## Deliverables
 
@@ -132,9 +90,8 @@ Write `.phase-6-output.json` sidecar (full absolute path provided by orchestrato
 
 - Codebase testing conventions analyzed and documented
 - All implementation units have corresponding tests
-- All functional requirements verified by tests
-- All error paths tested
-- All edge cases covered
+- All FRs verified by tests
+- All error paths tested; all edge cases covered
 - Mocking strategy matches codebase conventions
 - Assertions have precise expected values
 - Flow tests are blackbox (behavior, not implementation)
@@ -143,54 +100,22 @@ Write `.phase-6-output.json` sidecar (full absolute path provided by orchestrato
 
 ### Before Starting
 
-1. **State.json Missing or Invalid:**
-   - If `.forge/state.json` cannot be found or is corrupted
-   - **Action:** ERROR: "state.json missing or corrupted. Run /forge to reinitialize."
-   - **Recovery:** Do not proceed; return error
+See references/shared-phase-spec.md § error-cases (cases 1–4).
 
-2. **Prerequisite Phase Not Complete:**
-   - If Phase 5 (Impl Plan Review) status is not "approved"
-   - **Action:** ERROR: "Phase 5 (Impl Plan Review) must be approved first. Current status: {{ phase_5.status }}"
-   - **Recovery:** Return error; do not start test planning
-
-3. **IMPL-PLAN.md Missing:**
-   - If implementation plan file does not exist
-   - **Action:** ERROR: "IMPL-PLAN.md not found at {{ expected_path }}"
-   - **Recovery:** Return error; escalate
-
-4. **DESIGN.md Missing:**
-   - If design file (needed for test matrix baseline) does not exist
-   - **Action:** ERROR: "DESIGN.md not found at {{ expected_path }}. Cannot establish test matrix baseline."
-   - **Recovery:** Return error; escalate
-
-5. **Config Not Found:**
-   - If `.forge/FORGE-CONFIG.md` missing
-   - **Action:** WARN: "FORGE-CONFIG.md not found. Will infer test conventions from codebase."
-   - **Recovery:** Continue with codebase analysis
+- Case 2 for this phase: Phase 5 (Impl Plan Review) must be "approved"
+- Case 3 (Config not found) → WARN: "FORGE-CONFIG.md not found. Will infer test conventions from codebase." Continue.
+- **IMPL-PLAN.md missing** → ERROR: "IMPL-PLAN.md not found at {{ expected_path }}" Return error; escalate.
+- **DESIGN.md missing** → ERROR: "DESIGN.md not found at {{ expected_path }}. Cannot establish test matrix baseline." Return error; escalate.
 
 ### During Execution
 
-6. **Test Framework Ambiguous:**
-   - If multiple test frameworks detected in codebase
-   - **Action:** WARN: "Multiple test frameworks detected: {{ list }}. Using primary: {{ primary }}"
-   - **Recovery:** Continue with primary framework; note in TEST-PLAN.md
-
-7. **Mocking Strategy Unclear:**
-   - If codebase uses multiple mocking approaches inconsistently
-   - **Action:** WARN: "Mocking strategy inconsistent across tests. Documenting primary approach: {{ primary }}."
-   - **Recovery:** Continue; flag uncertainty in test plan
+- **Test framework ambiguous** → WARN: "Multiple test frameworks detected: {{ list }}. Using primary: {{ primary }}." Note in TEST-PLAN.md.
+- **Mocking strategy unclear** → WARN: "Mocking strategy inconsistent. Documenting primary approach: {{ primary }}." Flag in test plan.
 
 ### Before Completing
 
-8. **Output Path Not Writable:**
-   - If `.forge/features/<slug>/plan/` cannot be created or written to
-   - **Action:** ERROR: "Cannot write to {{ output_path }}: {{ reason }}"
-   - **Recovery:** Return error; do not complete
-
-9. **Placeholder or Ambiguous Tests:**
-   - If TEST-PLAN.md contains `[TBD]`, unspecified test cases, or pseudocode gaps
-   - **Action:** WARN: "Incomplete test specifications: {{ list }}. Escalating for clarification."
-   - **Recovery:** List specific sections; ask for guidance
+- **Output not writable** → see § error-cases case 4
+- **Placeholder or ambiguous tests** → WARN: "Incomplete test specs: {{ list }}. Escalating for clarification."
 
 ## Anti-Patterns
 
@@ -199,10 +124,9 @@ Write `.phase-6-output.json` sidecar (full absolute path provided by orchestrato
 - Do NOT invent testing patterns — follow existing ones
 - Do NOT over-mock (avoid mocking internal modules)
 - Do NOT test implementation details
-- Do NOT silently fail — report all errors with full context
+- Do NOT silently fail
 
 ## Handoff
 
 **Output:** `{feature_dir}/plan/TEST-PLAN.md` + `.phase-6-output.json`
-
 **Next Phase:** forge-review (test plan review)

@@ -8,7 +8,7 @@ metadata:
 
 # Code Implementation
 
-Translates implementation plan pseudocode into production code. Manages unit execution order, parallelism decisions, and quality gates.
+Translates implementation plan pseudocode into production code. Manages unit execution order, parallelism, and quality gates.
 
 ## When to Use
 
@@ -19,236 +19,134 @@ Translates implementation plan pseudocode into production code. Manages unit exe
 ## Context Sources
 
 - `.forge/FORGE-CONFIG.md` — conventions, quality gate command, paths
-- `.forge/state.json` — current state, verify phase 7 approved
-- `{feature_dir}/plan/IMPL-PLAN.md` — primary input (absolute path from orchestrator, pseudocode units)
-- `{feature_dir}/design/DESIGN.md` — contracts and wire formats for reference
-- Codebase source files — for integration points
+- `.forge/state.json` — current state (verify phase 7 approved)
+- `{feature_dir}/plan/IMPL-PLAN.md` — primary input (pseudocode units)
+- `{feature_dir}/design/DESIGN.md` — contracts and wire formats
+- Codebase source files — integration points
+
+See references/shared-phase-spec.md § feature-dir-note
 
 ## Process
 
-**MANDATORY FIRST OUTPUT:**
-```
-FORGE :: IMPLEMENT
-```
+See references/shared-phase-spec.md § mandatory-first-output — emit `FORGE :: IMPLEMENT`
 
 ### 1. Verify Prerequisites
 
-Read .forge/state.json. Confirm:
-- Phase 7 (Test Plan Review) status is "approved"
-- IMPL-PLAN.md exists and is approved
-
-If not met → stop and nudge user to complete prior phases.
+Via `forge slice` — confirm Phase 7 (Test Plan Review) status is "approved" and IMPL-PLAN.md exists. If not met → stop, nudge user to complete prior phases.
 
 ### 2. Parse Implementation Units
 
-Read IMPL-PLAN.md. Extract:
-- All implementation units with their dependencies
-- File paths for each unit
-- Pseudocode for each unit
+Read IMPL-PLAN.md. Extract: all units with dependencies, file paths, pseudocode.
 
 ### 3. Build Execution Plan
 
-Analyze unit dependencies and build a tiered execution plan:
+Build tiered execution plan from unit dependencies:
 
 ```
-Tier 1 (no dependencies): Unit A, Unit B — can run in parallel
+Tier 1 (no dependencies): Unit A, Unit B — parallel
 Tier 2 (depends on Tier 1): Unit C — sequential after Tier 1
 Tier 3 (depends on Tier 2): Unit D — sequential after Tier 2
 ```
 
 **Auto-decide parallelism:**
-- Tier has >1 independent unit → parallelize (use subagents if orchestrated)
-- Tier has 1 unit → sequential
-- All units sequential → no parallelism
-- Record the parallelism decision in `.phase-8-output.json` (decisions[]); the orchestrator regenerates FORGE-LOGS.md from state
+- Tier >1 independent unit → parallelize (subagents if orchestrated)
+- Tier 1 unit → sequential
+- Record parallelism decision in `.phase-8-output.json` decisions[]
 
 Output the execution plan:
 ```
 FORGE :: EXECUTION PLAN
   Tier 1 (parallel): Unit 1, Unit 2
   Tier 2 (sequential): Unit 3 (depends on Unit 1)
-  Tier 3 (sequential): Unit 4 (depends on Unit 2, Unit 3)
   Quality gate: [command from config]
 ```
 
 ### 4. Implement Each Unit
 
-For each unit, in tier order:
+Per unit, in tier order:
 
-1. Read the pseudocode from IMPL-PLAN.md
-2. Read FORGE-CONFIG.md conventions (naming, error handling, logging patterns)
+1. Read pseudocode from IMPL-PLAN.md
+2. Read FORGE-CONFIG.md conventions (naming, error handling, logging)
 3. Translate pseudocode to production code following conventions
 4. Run local quality gate (build + lint only, skip full test suite):
    - Pass → unit done
    - Fail → fix in-place, re-run (max 2 attempts)
-   - Still failing → mark unit as blocked, log reason, continue to next unit
-5. Record unit completion in `.phase-8-output.json` (the orchestrator regenerates FORGE-LOGS.md from state; this skill does not write FORGE-LOGS.md or state.json directly)
+   - Still failing → mark unit blocked, log reason, continue
+5. Record unit completion in `.phase-8-output.json`
 
-If the plan doesn't work as written (runtime issue, API mismatch, missing dependency):
-- **Minor deviation** (naming, parameter order, extra helper): adapt and document
-- **Moderate deviation** (different algorithm, restructured logic): document rationale, continue
-- **Major deviation** (design flaw, impossible as specified): HALT, report to user, may need rollback to phase 4
+Deviation handling:
+- **Minor** (naming, parameter order, extra helper): adapt and document
+- **Moderate** (different algorithm, restructured logic): document rationale, continue
+- **Major** (design flaw, impossible as specified): HALT, report to user, may need rollback to phase 4
 
 ### 5. Integration Check
 
 After all tiers complete:
 
-1. Run full quality gate (from FORGE-CONFIG.md):
-   ```
-   [quality gate command]
-   ```
-   **Apply Proof-of-Work Protocol** (see ../forge/references/verification-protocol.md#protocol-a):
+1. Run full quality gate (from FORGE-CONFIG.md). **Apply Proof-of-Work Protocol** (see ../forge/references/verification-protocol.md#protocol-a):
    - Capture tool version: `which <tool> && <tool> --version`
    - Extract work_count (files checked, tests run, items analyzed)
-   - If work_count == 0 → gate FAILS, even if exit code is 0
+   - work_count == 0 → gate FAILS even if exit code is 0
    - Log evidence in `.phase-8-output.json`
-
-2. If full gate fails:
-   - Diagnose which unit(s) caused the failure
-   - Fix targeted units
-   - Re-run full gate (max 2 attempts)
-   - Still failing → report to user with diagnostic info
-3. If full gate passes → phase complete
+2. Full gate fails → diagnose units, fix targeted, re-run (max 2 attempts); still failing → report to user
+3. Full gate passes → phase complete
 
 ### 6. Update State
 
-Write `.phase-8-output.json` sidecar in `{feature_dir}/`:
-```json
-{
-  "phase": 8,
-  "status": "completed",
-  "artifacts": [
-    {
-      "path": "[absolute path to implemented source file 1]",
-      "sha": "[git SHA]",
-      "size_bytes": [size]
-    },
-    {
-      "path": "[absolute path to implemented source file 2]",
-      "sha": "[git SHA]",
-      "size_bytes": [size]
-    }
-  ],
-  "decisions": [
-    "Execution: N tiers, parallel/sequential",
-    "Units completed: N/total"
-  ],
-  "execution_details": {
-    "model": "qc-readonly",
-    "reasoning_lines": [count],
-    "context_usage_percent": [%],
-    "elapsed_seconds": [duration]
-  },
-  "quality_gate": {
-    "passed": true,
-    "tool_version": "5.3.2",
-    "work_count": 42,
-    "exit_code": 0,
-    "deviations": [
-      "Unit 3: used async iterator instead of callback (minor, better fit for existing pattern)"
-    ]
-  }
-}
-```
+Write `.phase-8-output.json` sidecar (schema: see references/shared-phase-spec.md § sidecar-schema).
+Phase-specific: include quality_gate object with tool_version, work_count, exit_code, deviations[].
 
-**Orchestrator updates state.json** (skill does NOT write to state.json directly)
-- Orchestrator reads .phase-8-output.json
-- Orchestrator updates state.json with artifacts and quality gate result
-- Orchestrator commits to .forge git
+See references/shared-phase-spec.md § orchestrator-note
 
 ## Deviation Report
 
-If any deviations from the plan occurred, append to the phase log:
-
+If deviations from plan occurred, append to phase log:
 ```
 - Deviations:
   - [Unit]: [what changed] ([severity]: [rationale])
 ```
-
-Deviations are informational for the code review phase. The reviewer should verify deviations are justified.
+Deviations are informational for code review. Reviewer should verify they're justified.
 
 ## Parallelism Notes for Orchestrated Mode
 
-When running under forge-autopilot with subagents:
-- Each tier's independent units can be dispatched to separate subagents
+- Each tier's independent units → dispatch to separate subagents
 - Each subagent receives: unit pseudocode, config conventions, relevant source files
-- Local gate failures in one subagent don't block others
-- After all subagents in a tier complete, run integration check before proceeding to next tier
+- Local gate failure in one subagent doesn't block others
+- After all subagents in tier complete → run integration check before next tier
 
 ## Error Handling
 
 ### Before Starting
 
-1. **State.json Missing or Invalid:**
-   - If `.forge/state.json` cannot be found or is corrupted
-   - **Action:** ERROR: "state.json missing or corrupted. Run /forge to reinitialize."
-   - **Recovery:** Do not proceed; return error
+See references/shared-phase-spec.md § error-cases (cases 1–4).
 
-2. **Prerequisite Phase Not Complete:**
-   - If Phase 7 (Test Plan Review) status is not "approved"
-   - **Action:** ERROR: "Phase 7 (Test Plan Review) must be approved first. Current status: {{ phase_7.status }}"
-   - **Recovery:** Return error; do not start implementation
-
-3. **IMPL-PLAN.md Missing:**
-   - If implementation plan file does not exist
-   - **Action:** ERROR: "IMPL-PLAN.md not found at {{ expected_path }}"
-   - **Recovery:** Return error; escalate
-
-4. **Config Not Found:**
-   - If `.forge/FORGE-CONFIG.md` missing
-   - **Action:** ERROR: "FORGE-CONFIG.md missing. Cannot determine conventions, quality gate command, or output paths."
-   - **Recovery:** Return error; escalate
+- Case 2 for this phase: Phase 7 (Test Plan Review) must be "approved"
+- Case 3 (Config not found) → ERROR: "FORGE-CONFIG.md missing. Cannot determine conventions, quality gate, or output paths." Return error; escalate.
+- **IMPL-PLAN.md missing** → ERROR: "IMPL-PLAN.md not found at {{ expected_path }}" Return error; escalate.
 
 ### During Execution
 
-5. **Quality Gate Command Missing:**
-   - If quality gate command not defined in FORGE-CONFIG.md
-   - **Action:** ERROR: "Quality gate command not found in config. Cannot validate implementation."
-   - **Recovery:** Return error; escalate
-
-6. **Unit Local Quality Gate Fails (Max Retries):**
-   - If a unit fails local quality gate after 2 fix attempts
-   - **Action:** WARN: "Unit {{ unit_name }} failed local quality gate after 2 attempts. Marking as blocked. Reason: {{ reason }}"
-   - **Recovery:** Document; continue to next unit; record the blocked unit in `.phase-8-output.json` (orchestrator regenerates FORGE-LOGS.md)
-
-7. **Major Deviation from Plan:**
-   - If implementation significantly deviates from IMPL-PLAN.md (different algorithm, restructured logic)
-   - **Action:** HALT: "Major deviation detected: {{ description }}. Cannot proceed without explicit user approval."
-   - **Recovery:** Report to user with diagnostic details; may require design/plan rollback
-
-8. **Source File Integration Issue:**
-   - If implemented code cannot integrate with existing codebase (missing imports, API mismatch)
-   - **Action:** ERROR: "Integration error: {{ detail }}. Unit {{ unit_name }} cannot be merged."
-   - **Recovery:** Diagnose; attempt fix; if not resolved, escalate
+- **Quality gate command missing** → ERROR: "Quality gate command not found in config. Cannot validate implementation." Escalate.
+- **Unit local gate fails (max retries)** → WARN: "Unit {{ unit_name }} failed after 2 attempts. Marking blocked. Reason: {{ reason }}" Document; continue.
+- **Major deviation** → HALT: "Major deviation: {{ description }}. Cannot proceed without user approval." May require design/plan rollback.
+- **Source file integration issue** → ERROR: "Integration error: {{ detail }}. Unit {{ unit_name }} cannot be merged." Diagnose; attempt fix; escalate if unresolved.
 
 ### Before Completing
 
-9. **Output Path Not Writable:**
-   - If source files cannot be written to designated paths
-   - **Action:** ERROR: "Cannot write source file to {{ path }}: {{ reason }}"
-   - **Recovery:** Return error; do not complete
-
-10. **Full Quality Gate Fails (Max Retries):**
-    - If integration check (full quality gate) fails after 2 fix attempts
-    - **Action:** ERROR: "Full quality gate failed after 2 attempts. Build/lint errors: {{ list }}"
-    - **Recovery:** Return error with diagnostic info; escalate for user investigation
-
-11. **Phase Output File Not Writable:**
-    - If `.phase-8-output.json` cannot be written
-    - **Action:** ERROR: "Cannot write phase output to {{ path }}: {{ reason }}"
-    - **Recovery:** Return error; escalate
+- **Output not writable** → see § error-cases case 4
+- **Full quality gate fails (max retries)** → ERROR: "Full quality gate failed after 2 attempts: {{ list }}" Return diagnostic info; escalate.
+- **Phase output not writable** → ERROR: "Cannot write phase output to {{ path }}: {{ reason }}" Escalate.
 
 ## Anti-Patterns
 
-- Do NOT implement without an approved IMPL-PLAN.md
-- Do NOT skip the local quality gate per unit
-- Do NOT silently deviate from the plan — always document
-- Do NOT continue past a major deviation — halt and escalate
-- Do NOT run the full test suite as part of per-unit gates (too slow, tests may not exist yet)
-- Do NOT silently fail — report all errors with full context
+- Do NOT implement without approved IMPL-PLAN.md
+- Do NOT skip local quality gate per unit
+- Do NOT silently deviate from plan
+- Do NOT continue past a major deviation
+- Do NOT run full test suite as per-unit gate (too slow; tests may not exist yet)
+- Do NOT silently fail
 
 ## Handoff
 
 **Output:** Production source code + `.phase-8-output.json`
-
 **Next Phase:** forge-review (code review)
