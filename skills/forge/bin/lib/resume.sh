@@ -66,7 +66,7 @@ best_score, best = scored[0]
 
 if best_score == 0:
     msg = f"no feature matches '{query}'. Known: " + ", ".join(ft.get("slug","?") for ft in feats)
-    if json_mode: print(json.dumps({"ok": False, "error": msg}))
+    if json_mode: print(json.dumps({"ok": False, "error": msg}), file=sys.stderr)
     else: print("forge/resume: " + msg, file=sys.stderr)
     sys.exit(1)
 

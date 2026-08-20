@@ -60,11 +60,12 @@ Never invoke `bin/lib/*.sh` directly. Workers never read `state.json` directly �
   - If it resolves to a COMPLETED feature with open todos → surface the todos and offer to start a follow-up feature seeded with them (do NOT silently reactivate a completed feature).
   - If ambiguous (multiple candidates printed) → ask the user which slug.
   This is the path for "let's continue X" — never make the user hand-run scripts or pass state paths.
-- **Vague/descriptive resume intent** — resume phrasing with NO clear feature name (e.g. "there was a task where I made forge better", "the thing about tokens", "that performance work") OR when `forge resume <words>` returns no-match or ambiguous: use `forge features` as a cheap semantic catalog to reason over internally:
+- **Vague/descriptive resume intent** — resume phrasing with NO clear feature name (e.g. "there was a task where I made forge better", "the thing about tokens", "that performance work"). Ordering: if the phrasing contains ANY plausible feature name/keyword, try `forge resume <words>` FIRST; fall through to `forge features` ONLY when resume returns no-match or ambiguous, or when there is no name to pass at all. Then:
   1. Run `forge features` — read the compact catalog (slug, name, status, description, phase_progress, open_todo_count).
-  2. Reason over descriptions BY MEANING (not string overlap) — pick the single best semantic match.
-  3. Propose it to the user: "You mean **\<name\>** [\<slug\>]? (y/n)" — include 1-2 close alternates only if genuinely ambiguous.
-  4. On confirmation, run `forge resume <slug>` and act on its output as above.
+  2. If the catalog is EMPTY (no features), tell the user there are no features to match against and stop (offer to start a new feature). Otherwise continue.
+  3. Reason over descriptions BY MEANING (not string overlap) — pick the single best semantic match.
+  4. Propose it to the user: "You mean **\<name\>** [\<slug\>]? (y/n)" — include 1-2 close alternates only if genuinely ambiguous.
+  5. On confirmation, run `forge resume <slug>` and act on its output as above.
   **Rule:** the SCRIPT lists; the AGENT matches semantically. Never dump the full catalog to the user — reason over it internally and present only the best match (+ alternates when needed).
 
 Determine invocation mode before Step 0.
