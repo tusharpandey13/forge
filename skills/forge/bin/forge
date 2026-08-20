@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# forge — single-entrypoint dispatcher for forge exec layer
+#
+# USAGE: forge <verb> [args...]
+#
+# VERBS:
+#   init                       Initialize .forge/ workspace
+#   status                     Display active feature status dashboard
+#   slice                      Print active-feature-only projection (hot read, <1k tokens)
+#   merge   <feat> <phase> <output-json>  Merge phase output into state index
+#   save    <state-file>       Atomic save of state JSON (stdin → state-file)
+#   mark-complete <feat> <phase> <status> [--summary "..."]
+#                              Mark phase complete, write bulk NN.json, update thin index
+#   invalidate-downstream <feat> <phase>  Invalidate phases after <phase>
+#   repair  [<state-file>]     Scan index for dangling refs + orphan NN.json files
+#   ref     <feat> <name> [--print]  Deref a ref envelope (prints locator or content)
+#   archive <slug>             Move terminal feature bulk → archive.json, leave stub
+#
+# OUTPUT:
+#   --json   Emit structured JSON on stdout (default: human-readable text)
+#   Non-zero exit + message to stderr on all errors.
+#
+# ENTRYPOINT CONTRACT (BLK-2):
+#   SKILL.md calls: $(dirname <SKILL.md>)/bin/forge <verb>
+#   All deterministic state ops MUST go through this dispatcher.
+#   Workers NEVER touch state.json directly.
+#
+# STATE FILE LOCATION:
+#   Resolved as: ${FORGE_STATE:-<project_root>/.forge/state.json}
+#   Project root = first ancestor dir containing .forge/, or $PWD.
+#
+# WRITE ORDER (BLK-3):
+#   Phase bulk written to features/<slug>/phases/NN.json FIRST,
+#   then atomic index update (temp+rename) in state.json.
+#   Startup repair detects partial writes and marks incomplete.
+
+set -euo pipefail
+
+FORGE_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FORGE_LIB_DIR="${FORGE_BIN_DIR}/lib"
+
+# ── output mode ─────────────────────────────────────────────────────────────
+JSON_MODE=0
+args=()
+for arg in "$@"; do
+  if [[ "$arg" == "--json" ]]; then
+    JSON_MODE=1
+  else
+    args+=("$arg")
+  fi
+done
+set -- "${args[@]+"${args[@]}"}"
+
+export FORGE_JSON_MODE="$JSON_MODE"
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+forge_error() {
+  local msg="$1"
+  if [[ "$JSON_MODE" -eq 1 ]]; then
+    printf '{"ok":false,"error":"%s"}\n' "$msg" >&2
+  else
+    printf 'forge: error: %s\n' "$msg" >&2
+  fi
+  exit 1
+}
+
+# ── find project root (first ancestor with .forge/) ──────────────────────────
+find_project_root() {
+  local dir="$PWD"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -d "$dir/.forge" ]]; then
+      echo "$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+  # fallback: cwd (init will create .forge/)
+  echo "$PWD"
+}
+
+export FORGE_PROJECT_ROOT="${FORGE_PROJECT_ROOT:-$(find_project_root)}"
+export FORGE_STATE="${FORGE_STATE:-${FORGE_PROJECT_ROOT}/.forge/state.json}"
+export FORGE_DIR="${FORGE_PROJECT_ROOT}/.forge"
+
+# ── dispatch ─────────────────────────────────────────────────────────────────
+if [[ $# -lt 1 ]]; then
+  forge_error "no verb given. Usage: forge <verb> [args...]"
+fi
+
+verb="$1"
+shift
+
+case "$verb" in
+  init|status|slice|merge|save|mark-complete|invalidate-downstream|repair)
+    exec "${FORGE_LIB_DIR}/state.sh" "$verb" "$@"
+    ;;
+  ref)
+    exec "${FORGE_LIB_DIR}/ref.sh" "$verb" "$@"
+    ;;
+  archive)
+    exec "${FORGE_LIB_DIR}/archive.sh" "$verb" "$@"
+    ;;
+  *)
+    forge_error "unknown verb '${verb}'. Valid verbs: init status slice merge save mark-complete invalidate-downstream repair ref archive"
+    ;;
+esac

@@ -28,6 +28,7 @@ This is a **living reference document**. The orchestrator skill references this 
       "id": "feature-slug",
       "name": "Feature Name",
       "status": "in_progress|completed|failed",
+      "track": "standard|lite",
       "created": "2026-04-10T10:00:00Z",
       "is_active": true,
       "root_dir": ".forge/features/feature-slug",
@@ -280,6 +281,7 @@ Array of active features. Initially 1; architecture supports future multi-featur
 - `id` (string, slug): Feature identifier (kebab-case, e.g., `auth-middleware`)
 - `name` (string): Human-readable feature name
 - `status` (enum): Current feature status (see **Feature Status Enum** below)
+- `track` (enum): `standard` (12 phases) | `lite` (4 stages: Plan→Build→Test→Review). Chosen once at feature creation; immutable for the feature's life. Determines how many entries `phases` holds and which pipeline the orchestrator drives. See **Scope-Adaptive Lite Lane** in the orchestrator skill.
 - `created` (ISO 8601): Feature creation timestamp
 - `is_active` (boolean): Whether this is the active feature
 - `root_dir` (string, relative path): `.forge/features/<slug>`
@@ -567,7 +569,130 @@ jq '.features[0].phases | to_entries[] | select(.value.review_findings != null) 
 
 ---
 
+---
+
+## Schema — Version 2.0 (thin index + ref envelope)
+
+**Version field:** `state.json["version"] = "2.0"` — used for future auto-migrate detection.
+Do NOT build migration logic yet; detection hook only.
+
+### v2 Design: thin index
+
+The v2 schema replaces per-phase inline bulk (`artifacts`, `decisions`, `execution_details`,
+`review_findings`) with a ref envelope pointer. Bulk lives in `features/<slug>/phases/NN.json`.
+
+#### phase object (v2 thin index)
+
+```json
+{
+  "name": "Requirement Analysis",
+  "status": "completed",
+  "started": "2026-04-10T10:00:00Z",
+  "completed": "2026-04-10T10:30:00Z",
+  "ref": {
+    "type": "phase",
+    "repo": ".forge",
+    "locator": "/abs/path/.forge/features/<slug>/phases/01.json",
+    "summary": "≤120-char carry_forward hint"
+  }
+}
+```
+
+Hot index entry per phase = `{ref→NN.json, summary}` ONLY. ~2 lines each.
+
+Bulk fields (`artifacts`, `decisions`, `execution_details`, `review_findings`,
+`carry_forward`) are stored in `NN.json` and dereffed only on demand.
+
+#### Ref envelope (canonical — from REF-SPEC.md)
+
+```json
+{
+  "type": "artifact|ghost|phase",
+  "repo": "project|.forge",
+  "locator": "<absolute-path-or-sha>",
+  "summary": "≤120 char hint (carry_forward for phase refs)"
+}
+```
+
+- `type`: what it points to
+- `repo`: which git store / filesystem root. `project` = user repo. `.forge` = forge runtime.
+- `locator`: for `artifact` = relative path under feature dir; for `phase` = `features/<slug>/phases/NN.json` (absolute); for `ghost` = git SHA on `forge-ghost/<slug>` branch.
+- `summary`: ONLY field allowed in hot index besides pointer metadata. Heavy content stays behind locator.
+
+#### Bulk file: features/<slug>/phases/NN.json
+
+```json
+{
+  "phase": 1,
+  "slug": "feature-slug",
+  "written": "2026-04-10T10:30:00Z",
+  "status": "completed",
+  "artifacts": [...],
+  "decisions": [...],
+  "execution_details": {...},
+  "review_findings": null,
+  "carry_forward": "handoff summary for next phase"
+}
+```
+
+#### Archive stub: features/<slug>/archive.json
+
+Terminal features are archived via `forge archive <slug>`. Produces:
+
+```json
+{
+  "slug": "feature-slug",
+  "name": "Feature Name",
+  "archived": "2026-04-10T12:00:00Z",
+  "original_status": "completed",
+  "track": "standard",
+  "created": "...",
+  "phases": { "1": <bulk>, "2": <bulk>, ... }
+}
+```
+
+After archive, individual `phases/NN.json` files are removed. State index entry gets thin stubs
+pointing at `archive.json`.
+
+#### Write order (BLK-3 invariant)
+
+1. Write `features/<slug>/phases/NN.json` (bulk) — atomic temp+rename.
+2. Update `state.json` index with `{ref, summary}` — atomic temp+rename.
+
+On startup, `forge repair` scans for partial writes:
+- Ref locator file missing → mark phase `pending`, drop ref.
+- Bulk file exists but no index ref → rebuild ref from bulk.
+
+#### Hot vs cold access
+
+| What | Where | Enters context |
+|------|-------|----------------|
+| Active feature status | state.json thin index | slice output only (~1k chars) |
+| Phase bulk (artifacts, decisions) | phases/NN.json | only when a phase explicitly derefs |
+| Archived feature history | archive.json | only on demand |
+| Ghost project snapshots | forge-ghost/<slug> branch in project repo | only via ghost-diff |
+
+#### carry_forward semantics
+
+carry_forward = **PER-PHASE** (the `summary` field in the ref envelope). Each phase's summary
+is that phase's handoff hint for the next phase. To access older phase data: explicit deref of
+that phase's NN.json. This prevents index growing linearly with phase count.
+
+#### Cross-repo SHA (ghost refs)
+
+Ghost refs carry `repo: "project"`. Deref MUST target project's `.git`, not `.forge/.git`.
+The forge commit trailer `ghost-sha:` is always a project-repo SHA.
+
+---
+
 ## Change Log
+
+### Version 2.0 (2026-08-20)
+- Thin index: phase entries now hold `{ref, summary}` only; bulk in `phases/NN.json`
+- Ref envelope schema (type/repo/locator/summary) per REF-SPEC.md
+- Archive verb: terminal feature bulk → `archive.json`, stub in index
+- Version field bumped to "2.0" for future auto-migrate detection
+- Repair verb: detects dangling refs + orphan bulk files
 
 ### Version 1.0 (2026-04-10)
 - Initial schema definition
