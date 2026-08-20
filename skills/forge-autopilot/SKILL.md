@@ -1,6 +1,6 @@
 ---
 name: forge-autopilot
-description: Automated multi-phase execution for forge workflow. Dispatches phases 1-12 to qc-readonly task agents using state.json, with gate evaluation, fix cycles, and optional parallelism for independent phases.
+description: Automated multi-phase execution for forge workflow. Drives the Standard 12-phase pipeline or the Lite 4-stage lane based on feature.track. Dispatches to qc-readonly task agents using state.json, with gate evaluation, fix cycles, and optional parallelism for independent phases.
 license: Proprietary
 metadata:
   author: Auth0 SDKs Team <sdks@auth0.com>
@@ -58,7 +58,26 @@ Automated orchestration that dispatches all 12 phases to qc-readonly task agents
 - All other phases sequential (dependencies require sequential execution)
 - Autopilot can opt to run sequentially for simplicity or parallel for speed
 
-## Workflow — All 12 Phases
+## Track Awareness
+
+Autopilot reads `feature.track` from state.json and drives the matching pipeline:
+
+- `track == "standard"` → the 12-phase loop below.
+- `track == "lite"` → the 4-stage Lite loop (see **Lite Lane Autopilot** below).
+
+Autopilot NEVER changes the track and NEVER converts a lite feature to standard (or vice versa). Track is fixed at feature creation by the orchestrator (`select_track`). If `track` is absent (legacy state), default to `standard`.
+
+```
+FUNCTION autopilot_entry(feature):
+    track = feature.track OR "standard"
+    IF track == "lite":
+        RETURN autopilot_run_lite(feature)   // L1 → L4
+    ELSE:
+        RETURN autopilot_run(feature)         // Phases 1 → 12
+END FUNCTION
+```
+
+## Workflow — Standard Track (12 Phases)
 
 ```
 LOOP phases 1 → 12:
@@ -221,6 +240,106 @@ FUNCTION autopilot_run(feature_id):
 END FUNCTION
 ```
 
+## Lite Lane Autopilot (4 Stages)
+
+For `track == "lite"`, autopilot runs the raven-style pipeline: **L1 Plan → L2 Build → L3 Test → L4 Review**. Same dispatcher model, state atomicity, git commit, and escalation semantics as Standard — only the stage set and gate differ.
+
+### Lite Stage Table
+
+| Stage | Name | Input | Output | Gate |
+|-------|------|-------|--------|------|
+| L1 | Plan | context/*, FORGE-CONFIG.md | `lite/STORY.md` | N/A |
+| L2 | Build | STORY.md, named source files | source diffs + `lite/BUILD-NOTES.md` | N/A |
+| L3 | Test | STORY.md, touched files | `lite/VERIFY.md` (check table) | all checks PASS |
+| L4 | Review | diffs, STORY.md, VERIFY.md, FORGE-CONFIG.md | `lite/LITE-REVIEW.md` | `ok-to-merge` |
+
+Artifacts under `.forge/features/<slug>/lite/`. Internal artifacts (STORY.md, BUILD-NOTES.md, VERIFY.md, LITE-REVIEW.md) are caveman-ultra; product code/diffs are normal.
+
+### Lite Dispatch Loop (Pseudocode)
+
+```
+FUNCTION autopilot_run_lite(feature):
+    state = load_state()
+    display_lite_timeline(feature)   // shows L1..L4, not 1..12
+
+    fix_cycles = 0
+    LITE_STAGES = [1, 2, 3, 4]   // L1..L4
+
+    FOR stage_num IN LITE_STAGES:
+        IF feature.phases[stage_num].status IN ["approved", "completed"]:
+            CONTINUE
+        IF feature.phases[stage_num].status == "failed":
+            OUTPUT: "Lite stage L{{stage_num}} previously failed. Awaiting user action."
+            RETURN
+
+        OUTPUT: ">>> Dispatching L{{stage_num}}: {{ LITE_STAGE_NAMES[stage_num] }}"
+        result = dispatch_phase_to_task_agent(state, stage_num)   // uses lite skill + caveman constraints
+        IF NOT result.success:
+            feature.phases[stage_num].status = "failed"
+            save_state_atomic(state, {op: "phase_timeout", phase: stage_num})
+            OUTPUT: "L{{stage_num}} dispatch failed (timeout)"
+            RETURN
+
+        phase_output = result.output
+        merge_phase_output(feature, stage_num, phase_output)
+        save_state_atomic(state, {op: "phase_complete", phase: stage_num})
+        commit_phase_artifacts(stage_num, "completed")
+
+        // L3 Test gate: every check must PASS
+        IF stage_num == 3:
+            IF phase_output.verify.any_fail:
+                OUTPUT: "L3 Test: FAIL — check(s) failed. Looping back to L2 Build."
+                IF fix_cycles < 2:
+                    fix_cycles += 1
+                    reset_stage(feature, 2)   // re-run Build with failing-check notes
+                    reset_stage(feature, 3)
+                    save_state_atomic(state, {op: "lite_fix_cycle", phase: 3, cycle: fix_cycles})
+                    RESTART FOR at stage_num = 2
+                ELSE:
+                    OUTPUT: "ESCALATION: L3 failing after 2 fix cycles"
+                    feature.phases[3].status = "failed"
+                    save_state_atomic(state, {op: "escalation", phase: 3})
+                    RETURN
+
+        // L4 Review gate: ok-to-merge | needs-fix
+        IF stage_num == 4:
+            gate = phase_output.review_findings.gate   // "ok-to-merge" | "needs-fix"
+            IF gate == "needs-fix":
+                IF fix_cycles < 2:
+                    fix_cycles += 1
+                    OUTPUT: "L4 Review: needs-fix — looping L4 → L2 with issue list"
+                    // issue list: caveman-ultra [file:line] [problem] [fix]
+                    dispatch_lite_fix(state, phase_output.review_findings.issues)
+                    reset_stage(feature, 2)
+                    reset_stage(feature, 3)
+                    reset_stage(feature, 4)
+                    save_state_atomic(state, {op: "lite_fix_cycle", phase: 4, cycle: fix_cycles})
+                    RESTART FOR at stage_num = 2
+                ELSE:
+                    OUTPUT: "ESCALATION: L4 needs-fix after 2 fix cycles"
+                    feature.phases[4].status = "failed"
+                    save_state_atomic(state, {op: "escalation", phase: 4})
+                    RETURN
+            ELSE:  // ok-to-merge
+                OUTPUT: "L4 Review: ok-to-merge"
+
+        IF stage_num != 4 AND stage_num != 3:
+            feature.phases[stage_num].status = "approved"
+            save_state_atomic(state, {op: "phase_approve", phase: stage_num})
+            commit_phase_artifacts(stage_num, "approved")
+
+    // All lite stages done
+    feature.phases[4].status = "approved"
+    feature.status = "completed"
+    save_state_atomic(state, {op: "feature_complete", feature_id: feature.id})
+    commit_phase_artifacts(4, "feature_complete")
+    OUTPUT: "Lite feature complete — ok-to-merge (L1→L4 approved)."
+    RETURN
+END FUNCTION
+```
+
+**Lite fix cycle:** on L4 `needs-fix`, re-dispatch L2 Build with the review issue list (caveman-ultra `[file:line] [problem] [fix]`), then re-run L3 and L4. Max 2 cycles, then escalate — identical budget to Standard.
+
 ## Fix Cycle Dispatch
 
 ```
@@ -291,11 +410,12 @@ END FUNCTION
 If autopilot is interrupted:
 
 1. Run `/forge` or autopilot again
-2. Autopilot reads state.json
-3. Skips all phases with status="approved" or "completed"
-4. Resumes from first pending or invalidated phase
-5. If a phase is "in_progress", restart from beginning (task agents are idempotent)
-6. If a phase is "failed", halt and ask user to retry or fix
+2. Autopilot reads state.json, including `feature.track`
+3. Resumes the matching pipeline (Standard 1→12 or Lite L1→L4)
+4. Skips all stages with status="approved" or "completed"
+5. Resumes from first pending or invalidated stage
+6. If a stage is "in_progress", restart from beginning (task agents are idempotent)
+7. If a stage is "failed", halt and ask user to retry or fix
 
 ## Escalation Conditions
 

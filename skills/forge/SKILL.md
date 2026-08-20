@@ -18,7 +18,9 @@ Main orchestrator skill implementing the dispatcher-based workflow. Manages stat
 4. **Feature Namespacing:** All artifacts under `.forge/features/<feature-slug>/`
 5. **Mandatory Status Display:** First output always shows phase timeline and current status (NFR-4)
 6. **Cascade Detection:** After artifact changes, invalidate downstream phases (FR-6)
-7. **Anti-Phase-Jump Enforcement:** Forge NEVER permits skipping phases. All features follow the full 12-phase pipeline in strict order, regardless of perceived task size. Small tasks are NOT exempt.
+7. **Anti-Phase-Jump Enforcement:** Forge NEVER permits skipping phases *within a chosen track*. Once a track is selected (Standard 12-phase or Lite 4-stage), all its stages run in strict order. No skipping, no improvised fast-paths mid-track.
+8. **Scope-Adaptive Track Selection:** At feature creation, Forge selects a track by scope. Small, well-bounded tasks may run the **Lite Lane** (4 stages) instead of the Standard 12-phase pipeline. Track choice is explicit, gated by hard criteria, and user-confirmed. This is NOT phase-jumping — the Lite Lane is a distinct, complete pipeline. (See **Scope-Adaptive Lite Lane** below.)
+9. **Caveman-Ultra Internal Artifacts:** All internal Forge artifacts (requirements, design, plans, reviews, test plans) are written in caveman-ultra to minimize tokens. Product code and user-facing documentation are ALWAYS normal prose. Safety-critical text overrides caveman. (See **Caveman-Ultra Internal Artifacts** below.)
 
 **References:**
 - See [state-schema.md](./references/state-schema.md) for complete state.json structure
@@ -34,6 +36,100 @@ Main orchestrator skill implementing the dispatcher-based workflow. Manages stat
 - User asks about workflow phases or status
 - User needs to progress to next phase
 - User wants to check phase timeline or review findings
+
+## Scope-Adaptive Lite Lane
+
+Forge supports two tracks. The track is chosen once, at feature creation, and recorded in `state.json` as `feature.track` (`"standard"` | `"lite"`). It cannot be switched mid-feature — a scope change requires closing the feature and re-creating it.
+
+### Tracks
+
+| Track | Stages | Use when |
+|-------|--------|----------|
+| `standard` | 12 phases (Req→…→Docs) | Default. Any feature not meeting ALL Lite gates. |
+| `lite` | 4 stages: **Plan → Build → Test → Review** | Small, bounded change meeting ALL Lite gates. |
+
+### Lite Lane Gate (ALL must hold)
+
+A feature qualifies for the Lite Lane ONLY if every condition is true:
+
+1. Touches **≤ 3 files**.
+2. Has **clear, testable acceptance criteria** stated up front.
+3. **No architectural change** — no new module boundary, no cross-cutting refactor.
+4. **No public API / contract change** (REST, exported types, DB schema).
+5. **No security-sensitive surface** (auth, crypto, access control, secrets).
+6. **User explicitly confirms** the Lite Lane after Forge proposes it.
+
+If ANY gate fails → Standard track. When uncertain → Standard track. The Lite Lane is an optimization for genuinely small work, never a shortcut for risky work.
+
+### Lite Lane Stages
+
+Mirrors the raven workflow. Each stage is a dispatched task agent; the orchestrator enforces order (no skipping) exactly as in Standard.
+
+| Stage | Name | Input | Output artifact | Review? |
+|-------|------|-------|-----------------|---------|
+| L1 | Plan | context, FORGE-CONFIG.md | `STORY.md` (context, objective, constraints, 3–8 step plan, acceptance criteria) | — |
+| L2 | Build | STORY.md, named source files | code diffs + `BUILD-NOTES.md` (caveman-ultra) | — |
+| L3 | Test | STORY.md, touched files | `VERIFY.md` (check table: PASS/FAIL/SKIP) | — |
+| L4 | Review | diffs, STORY.md, VERIFY.md, FORGE-CONFIG.md | `LITE-REVIEW.md` + gate: `ok-to-merge` \| `needs-fix` | gate |
+
+Lite Lane artifacts live under `.forge/features/<slug>/lite/`. State, git hardening, rollback, and artifact-boundary enforcement apply identically to Standard. On `needs-fix`, orchestrator loops L4→L2 with a caveman-ultra issue list (`[file:line] [problem] [fix]`).
+
+### Track Selection at Feature Creation
+
+```
+FUNCTION select_track(feature_context):
+    gate = evaluate_lite_gate(feature_context)   // returns pass/fail + reasons
+
+    IF gate.all_pass:
+        OUTPUT (normal English):
+          "This looks like a small, bounded change (≤3 files, clear criteria,
+           no API/arch/security impact). I can run the Lite Lane
+           (Plan → Build → Test → Review) instead of the full 12-phase
+           pipeline to save time and tokens. Proceed with Lite Lane? (yes/no)"
+        IF user confirms:
+            feature.track = "lite"
+        ELSE:
+            feature.track = "standard"
+    ELSE:
+        feature.track = "standard"
+        // Optionally surface why (which gate failed) for transparency
+
+    RETURN feature.track
+END FUNCTION
+```
+
+**Status display:** the phase timeline shows 4 Lite stages instead of 12 phases when `feature.track == "lite"`. Anti-phase-jump enforcement (Principle 7) applies to whichever track is active.
+
+## Caveman-Ultra Internal Artifacts
+
+To minimize token usage without losing technical substance, all **internal** Forge artifacts are written in caveman-ultra.
+
+**Applies to (internal):** REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, TEST-PLAN.md, all review docs, STORY.md, BUILD-NOTES.md, VERIFY.md, FORGE-LOGS.md, operation notes, diff explanations, issue lists.
+
+**Never caveman (always normal prose/syntax):**
+- Product/source code and code comments.
+- User-facing documentation (Phase 12 output destined for end users).
+- Commit messages and PR descriptions.
+- Any text shown directly to the user (status output, questions, warnings).
+- Identifiers, file paths, commands, error strings — reproduce EXACTLY, never abbreviate.
+
+**Caveman-ultra rules:** drop articles (a/an/the), filler, and pleasantries; fragments OK; pattern `[thing] [action] [reason]`; abbreviate common terms (DB/auth/config/req/res/fn/impl); arrows for causality (X → Y). Technical terms, identifiers, paths, and commands stay exact.
+
+### Safety-Override Phrasing Rule (Hard)
+
+Caveman compression MUST be dropped — reverting to clear, normal English — for any text where ambiguity is dangerous:
+
+- Destructive or irreversible actions (`rm`, `DROP TABLE`, force-push, data deletion, migration rollback).
+- Security rules, auth logic, access-control decisions.
+- Multi-step sequences where fragment ordering could be misread.
+- Any warning about non-reversible consequences.
+
+For such items: write full sentences, prefix with `WARNING:` where a destructive action is involved, state the consequence explicitly, then resume caveman-ultra for the surrounding non-critical text.
+
+Example (inside an otherwise caveman artifact):
+> ...migration adds `is_active` col. Backfill default `true`.
+> **WARNING:** The rollback step runs `DROP COLUMN is_active` and permanently deletes the column and its data. Take a database backup before applying the rollback.
+> Resume: rollback tested on staging → OK.
 
 ## On Trigger: Main Orchestrator Flow
 
@@ -146,21 +242,31 @@ IF active_feature NOT found:
 IF active_feature found:
     current_phase = find_current_phase(active_feature)
 
+    // Track-aware pipeline length and labels
+    track = active_feature.track OR "standard"    // legacy state → standard
+    IF track == "lite":
+        stage_count = 4
+        stage_label = "Stage"                      // L1..L4: Plan, Build, Test, Review
+    ELSE:
+        stage_count = 12
+        stage_label = "Phase"
+
     OUTPUT:
     ```
-    FORGE :: {{ active_feature.name }}
-      Phase: {{ current_phase.number }} of 12 — {{ current_phase.name }} ({{ current_phase.status }})
+    FORGE :: {{ active_feature.name }}  [track: {{ track }}]
+      {{ stage_label }}: {{ current_phase.number }} of {{ stage_count }} — {{ current_phase.name }} ({{ current_phase.status }})
       Started: {{ format_date(active_feature.created) }}
       Current: {{ phase_status_description(current_phase) }}
       Next: {{ next_action(current_phase) }}
 
-      Phase Timeline:
+      Timeline:
     ```
 
-    FOR phase_num = 1 TO 12:
+    FOR phase_num = 1 TO stage_count:
         phase = active_feature.phases[phase_num]
         icon = status_icon(phase.status)
-        OUTPUT: "  Phase {{ phase_num }}:  {{ phase.name | pad(25) }}  [{{ icon }}  {{ phase.status }}]"
+        prefix = IF track == "lite" THEN "L" + phase_num ELSE "Phase " + phase_num
+        OUTPUT: "  {{ prefix }}:  {{ phase.name | pad(25) }}  [{{ icon }}  {{ phase.status }}]"
 
     OUTPUT: ""
     OUTPUT: "Artifacts: {{ count(active_feature.artifacts) }} (committed)"
@@ -179,9 +285,22 @@ IF active_feature found:
 
 After mandatory status display, determine next action based on current phase status:
 
-**CRITICAL ORCHESTRATOR RULE:** If a user requests to jump to an implementation phase (4, 6, 8, 10) or skip phases, orchestrator MUST refuse with the anti-phase-jump message and explain why.
+**CRITICAL ORCHESTRATOR RULE:** If a user requests to jump to an implementation phase (4, 6, 8, 10) or skip phases, orchestrator MUST refuse with the anti-phase-jump message and explain why. This applies within either track.
 
 ```
+// Track-relative constants (used throughout Step 3)
+track = active_feature.track OR "standard"
+IF track == "lite":
+    max_stage      = 4
+    REVIEW_STAGES  = [4]                 // L4 Review; gate = ok-to-merge | needs-fix
+    STAGE_NAMES    = {1:"Plan", 2:"Build", 3:"Test", 4:"Review"}
+    stage_word     = "Stage"
+ELSE:
+    max_stage      = 12
+    REVIEW_STAGES  = [3, 5, 7, 9, 11]    // gate = PASS | FAIL
+    STAGE_NAMES    = phase_names
+    stage_word     = "Phase"
+
 SWITCH current_phase.status:
     CASE "pending":
         IF current_phase.number == 1:
@@ -204,27 +323,27 @@ SWITCH current_phase.status:
         CALL poll_for_completion(current_phase)
 
     CASE "completed":
-        IF current_phase.number IN [3, 5, 7, 9, 11]:  // Review phase
-            OUTPUT: "Phase {{ current_phase.number }} completed (review artifact produced)"
+        IF current_phase.number IN REVIEW_STAGES:  // Review stage
+            OUTPUT: "{{ stage_word }} {{ current_phase.number }} completed (review artifact produced)"
             OUTPUT: "Review findings: "
             IF review_findings NOT NULL:
-                OUTPUT: "  Gate: {{ review_findings.gate }}"
+                OUTPUT: "  Gate: {{ review_findings.gate }}"   // PASS|FAIL (standard) or ok-to-merge|needs-fix (lite)
                 OUTPUT: "  Critical: {{ review_findings.critical }}, Major: {{ review_findings.major }}"
             OUTPUT: "Next: Review findings and approve or iterate"
         ELSE:
-            OUTPUT: "Phase {{ current_phase.number }} completed"
-            OUTPUT: "Next: Proceed to next phase"
+            OUTPUT: "{{ stage_word }} {{ current_phase.number }} completed"
+            OUTPUT: "Next: Proceed to next {{ stage_word | lower }}"
 
     CASE "approved":
         next_phase = current_phase.number + 1
-        IF next_phase <= 12:
-            OUTPUT: "Phase {{ current_phase.number }} approved"
-            OUTPUT: "Next: Start phase {{ next_phase }} — {{ phase_names[next_phase] }}"
+        IF next_phase <= max_stage:
+            OUTPUT: "{{ stage_word }} {{ current_phase.number }} approved"
+            OUTPUT: "Next: Start {{ stage_word | lower }} {{ next_phase }} — {{ STAGE_NAMES[next_phase] }}"
 
-            IF next_phase IN [3, 5, 7, 9, 11]:
-                OUTPUT: "Tip: Review phases can run in this conversation or separately"
+            IF next_phase IN REVIEW_STAGES:
+                OUTPUT: "Tip: Review stages can run in this conversation or separately"
         ELSE:
-            OUTPUT: "Feature complete! All 12 phases approved."
+            OUTPUT: "Feature complete! All {{ max_stage }} {{ stage_word | lower }}s approved."
 
     CASE "failed":
         OUTPUT: "Phase {{ current_phase.number }} FAILED"
@@ -514,7 +633,7 @@ Display current phase and timeline (no artifacts).
 ```
 Output:
   FORGE :: [Feature Name]
-    Phase: [N] of 12 — [Phase Name] ([status])
+    Phase: [N] of [max_stage] — [Phase Name] ([status])   // max_stage = 12 standard, 4 lite
     Started: [date]
     Current: [brief status]
     Next: [action]
@@ -801,7 +920,18 @@ Detailed flow for `config_initialization_flow()`:
 
 ## Glossary & Phase Names
 
-All 12 phases in order:
+### Track Relativity (Normative)
+
+All phase-count and review-set literals in the pseudocode below (`1 TO 12`, `<= 12`, `[3, 5, 7, 9, 11]`) are written for the **Standard track**. They are shorthand for the track-relative constants defined in Step 3:
+
+- `max_stage` — 12 (standard) | 4 (lite)
+- `REVIEW_STAGES` — `[3,5,7,9,11]` (standard) | `[4]` (lite)
+- Loops `FOR n = 1 TO 12`, `FOR n FROM x TO 12`, and checks `<= 12` → use `max_stage`.
+- Membership `IN [3,5,7,9,11]` → use `IN REVIEW_STAGES`.
+
+Every function (dispatch_phase, poll_for_completion, rollback_to_phase, invalidate_downstream_phases, mark_phase_complete) applies these substitutions when the active feature's `track == "lite"`.
+
+### Standard Track — 12 phases in order:
 
 | Phase | Name | Execution | Review |
 |-------|------|-----------|--------|
@@ -817,6 +947,15 @@ All 12 phases in order:
 | 10 | Test Implementation | task_agent | N/A |
 | 11 | Test Review | task_agent | Review (findings) |
 | 12 | Documentation | task_agent | N/A |
+
+### Lite Track — 4 stages in order:
+
+| Stage | Name | Execution | Review |
+|-------|------|-----------|--------|
+| L1 | Plan | task_agent | N/A |
+| L2 | Build | task_agent | N/A |
+| L3 | Test | task_agent | gate (all checks PASS) |
+| L4 | Review | task_agent | gate (ok-to-merge \| needs-fix) |
 
 ## Edge Cases & Error Handling
 
@@ -864,7 +1003,8 @@ All 12 phases in order:
 4. **Atomic Filesystem:** Temp file + rename is atomic on POSIX filesystems (Linux, macOS)
 5. **Task Agent Dispatch:** Task agents can be dispatched asynchronously; orchestrator polls for completion
 6. **Read-Only Task Agents:** Task agents use `qc-readonly` model (enforced write-only to artifacts)
-7. **NO PHASE SKIPPING:** Orchestrator ALWAYS enforces sequential phase progression 1→2→...→12. No exemptions for small tasks, no fast-paths, no jumps. Violation → explicit refusal with detailed reason.
+7. **NO PHASE SKIPPING (within a track):** Orchestrator ALWAYS enforces sequential progression within the active track — Standard = 1→2→…→12, Lite = L1→L2→L3→L4. No jumps, no improvised fast-paths mid-track. Track is chosen once at creation (Standard default; Lite only when all gates pass and user confirms) and is immutable for the feature. Violation → explicit refusal with detailed reason.
+8. **Track Immutability:** A feature's `track` cannot change mid-flight. A scope change that breaks Lite gates requires closing the feature and re-creating it on the Standard track.
 
 ## Workflow Summary
 
@@ -883,6 +1023,15 @@ DISPLAY status dashboard (MANDATORY)
 IF no active feature:
   OUTPUT: "No feature yet"
   RETURN
+
+// TRACK SELECTION (at feature creation only)
+IF feature just created:
+  track = select_track(feature_context)   // "standard" (12 phases) | "lite" (4 stages)
+  // Lite requires ALL gates: ≤3 files, clear criteria, no arch/API/security change, user-confirmed
+  // On any gate fail or uncertainty → standard. See "Scope-Adaptive Lite Lane".
+
+// Pipeline length depends on track: standard = 12 phases, lite = 4 stages (L1..L4)
+// Anti-phase-jump enforcement applies within whichever track is active.
 
 IF phase pending:
   // ANTI-PHASE-JUMP CHECK

@@ -54,6 +54,19 @@ Expected length: {{ expected_length_lines }} lines
 - Read-only access to {{ config_path }} and input artifact files
 - If blocked or unable to complete, report error with full context
 
+## Output Style (Caveman-Ultra for Internal Artifacts)
+
+This artifact is an INTERNAL Forge document. Write it in caveman-ultra to minimize tokens while preserving full technical substance:
+
+- Drop articles (a/an/the), filler, and pleasantries. Fragments OK.
+- Pattern: `[thing] [action] [reason]`. Arrows for causality (X → Y).
+- Abbreviate common terms (DB/auth/config/req/res/fn/impl) — but NEVER abbreviate identifiers, file paths, commands, or error strings; reproduce those EXACTLY.
+- Keep all required sections and headings intact — compress prose within them, do not delete structure.
+
+**NEVER apply caveman to:** actual code, code comments, commit messages, or user-facing end-user documentation — those are always normal prose/syntax. (If this phase emits product code or end-user docs, that output is exempt from caveman.)
+
+**Safety-Override (Hard):** For any text describing a destructive/irreversible action (rm, DROP, force-push, data loss, migration rollback), security/auth logic, or a multi-step sequence where misreading is dangerous — drop caveman, write full clear sentences, prefix destructive actions with `WARNING:`, and state the consequence explicitly. Resume caveman-ultra afterward.
+
 ## Quality Gate
 
 {{ quality_gate_description }}
