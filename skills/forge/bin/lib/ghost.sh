@@ -101,7 +101,7 @@ EXCLUDEOF
     done < <(git -C "$proj_root" config \
                --file "${proj_root}/.gitmodules" \
                --get-regexp 'submodule\..*\.path' 2>/dev/null \
-             | awk '{print $2}' || true)
+             | sed 's/^[^ ]* //' || true)
     if [[ ${#submodule_paths[@]} -gt 0 ]]; then
       out_warn "submodules detected (${submodule_paths[*]}): gitlink entries will be skipped"
     fi
@@ -194,10 +194,11 @@ cmd_ghost_diff() {
   if [[ "$JSON_MODE" -eq 1 ]]; then
     local diff_output
     diff_output="$(git -C "$proj_root" diff "$sha1" "$sha2" 2>&1 || true)"
-    python3 -c "
+    printf '%s' "$diff_output" | python3 -c "
 import json, sys
-print(json.dumps({'ok': True, 'slug': sys.argv[2], 'sha1': sys.argv[3], 'sha2': sys.argv[4], 'diff': sys.argv[1]}))
-" "$diff_output" "$slug" "$sha1" "$sha2"
+diff = sys.stdin.read()
+print(json.dumps({'ok': True, 'slug': sys.argv[1], 'sha1': sys.argv[2], 'sha2': sys.argv[3], 'diff': diff}))
+" "$slug" "$sha1" "$sha2"
   else
     git -C "$proj_root" diff "$sha1" "$sha2"
   fi

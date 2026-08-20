@@ -12,7 +12,7 @@ LLM-assisted coding works best with clear boundaries and persistent state. Witho
 - **Artifact boundary enforcement** — all forge outputs under `.forge/features/<feature-slug>/` with feature-scoped isolation
 - **Hardened git operations** — dedicated `.forge/.git` with defensive config (no GPG, no hooks, no user identity leak)
 - **Cascade detection** — bidirectional dependency graph detects when changes invalidate downstream phases
-- **Central context hub** — FORGE-LOGS.md auto-generated from state.json; full feature history preserved across sessions
+- **Central context hub** — `forge log-query` reconstructs audit from `.forge/.git`; full feature history preserved across sessions
 - **Review gates** — phases 3, 5, 7, 9, 11 are reviews; critical/major findings block progression
 - **Parallel execution** — independent phases run concurrently; orchestrator merges state updates atomically
 
@@ -56,13 +56,13 @@ Say "analyze requirements" to start Phase 1, or just `/forge` to see current sta
 ```
 project/
 ├── .forge/                          # Internals (auto-managed, gitignored)
-│   ├── .git/                        # Forge internal git repo (defensive config)
-│   ├── state.json                   # Machine-readable source of truth
+│   ├── .git/                        # Forge internal git repo (git-as-log, defensive config)
+│   ├── state.json                   # Machine-readable thin index (v2: refs + summaries only)
 │   ├── operations.jsonl             # Append-only operation audit trail
 │   ├── FORGE-CONFIG.md              # Detected conventions + user config
-│   ├── FORGE-LOGS.md                # Auto-generated human-readable view
 │   └── features/
 │       └── <feature-slug>/
+│           ├── phases/              # Bulk phase data (NN.json per phase)
 │           ├── requirement/REQUIREMENTS.md
 │           ├── design/DESIGN.md
 │           ├── design/DESIGN-REVIEW-*.md
@@ -102,11 +102,11 @@ Phases 1, 2, 4, 6, 8, 10, 12 dispatch to `qc-readonly` task agents (background e
 
 ### State Management
 
-`.forge/state.json` is the source of truth:
+`.forge/state.json` (v2 thin index) is the source of truth:
 
 ```json
 {
-  "version": "1.0",
+  "version": "2.0",
   "features": [{
     "id": "feature-slug",
     "name": "Feature Name",
@@ -114,14 +114,13 @@ Phases 1, 2, 4, 6, 8, 10, 12 dispatch to `qc-readonly` task agents (background e
     "phases": {
       "1": {
         "status": "approved",
-        "artifacts": [{path, sha, size}],
-        "decisions": ["DD-1: ...", "DD-2: ..."]
+        "ref": {"type": "bulk", "path": "features/feature-slug/phases/01.json"},
+        "summary": "Requirements extracted"
       },
-      "2": {...},
       "3": {
         "status": "approved",
-        "review_findings": {"critical": 0, "major": 0, "minor": 2},
-        "gate": "PASS"
+        "ref": {"type": "bulk", "path": "features/feature-slug/phases/03.json"},
+        "summary": "Design review PASS (0 critical, 0 major, 2 minor)"
       }
     },
     "dependency_graph": {
@@ -133,6 +132,8 @@ Phases 1, 2, 4, 6, 8, 10, 12 dispatch to `qc-readonly` task agents (background e
 }
 ```
 
+Bulk phase data (artifacts, decisions, execution details) lives in `features/<slug>/phases/NN.json` and is only read on demand via `forge ref`. Use `forge log-query` to reconstruct audit timeline from `.forge/.git` history.
+
 **Key features:**
 - Single JSON source of truth (no manual editing required)
 - Dependency graph enables cascade detection (bidirectional edges)
@@ -141,7 +142,7 @@ Phases 1, 2, 4, 6, 8, 10, 12 dispatch to `qc-readonly` task agents (background e
 
 ### Context Management
 
-Start a **new conversation** between major phases to keep context focused. FORGE-LOGS.md + state.json provide full continuity.
+Start a **new conversation** between major phases to keep context focused. `forge slice` + `forge log-query` provide full continuity across sessions.
 
 Suggested conversation boundaries:
 - After Phase 1 → new conversation for Phase 2
@@ -232,9 +233,9 @@ If you have an existing forge project with artifacts in `forge/requirement/`, `f
 ```
 
 This command:
-1. Reads old FORGE-LOGS.md and artifacts
-2. Generates state.json with feature namespacing
-3. Moves artifacts to `.forge/features/<slug>/`
+1. Reads old artifacts and any legacy FORGE-LOGS.md (if present)
+2. Generates state.json v2 thin index with feature namespacing
+3. Moves artifacts to `.forge/features/<slug>/phases/NN.json`
 4. Commits migration with full audit trail in operations.jsonl
 5. Archives or deletes old structure (user confirms)
 

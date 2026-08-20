@@ -100,7 +100,7 @@ Write `.phase-{{ PHASE_NUM }}-output.json` with review_findings (schema: see ref
 }
 ```
 
-See references/shared-phase-spec.md § orchestrator-note — do NOT update FORGE-LOGS.md or commit; orchestrator handles state updates.
+See references/shared-phase-spec.md § orchestrator-note — do NOT commit; orchestrator handles state updates.
 
 ## Output Format
 

@@ -564,7 +564,6 @@ jq '.features[0].phases | to_entries[] | select(.value.review_findings != null) 
 - `.forge/state.json` — Instance file (actual state)
 - `.forge/operations.jsonl` — Instance file (audit log)
 - `.forge/FORGE-CONFIG.md` — Project conventions (referenced in context.config_path)
-- `.forge/FORGE-LOGS.md` — Generated from state.json (human-readable summary)
 - `.forge/.git/` — Git repository (tracks all state changes)
 
 ---

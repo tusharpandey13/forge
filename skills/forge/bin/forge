@@ -60,7 +60,7 @@ for arg in "$@"; do
     args+=("$arg")
   fi
 done
-set -- "${args[@]+"${args[@]}"}"
+if [[ ${#args[@]} -gt 0 ]]; then set -- "${args[@]}"; else set --; fi
 
 export FORGE_JSON_MODE="$JSON_MODE"
 

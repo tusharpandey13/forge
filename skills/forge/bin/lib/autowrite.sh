@@ -127,6 +127,7 @@ cmd_autowrite_phase() {
 }
 
 # ── entry ─────────────────────────────────────────────────────────────────────
+[[ $# -ge 1 ]] || { echo "no verb" >&2; exit 1; }
 verb="$1"
 shift
 case "$verb" in
