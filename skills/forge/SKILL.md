@@ -6,27 +6,26 @@ metadata:
   author: Auth0 SDKs Team <sdks@auth0.com>
 ---
 
-# Forge — Orchestrator (Dispatcher Architecture)
+# Forge — Orchestrator (Thin Router)
 
-Main orchestrator skill implementing the dispatcher-based workflow. Manages state.json, dispatches phases to qc-readonly task agents, displays status dashboards, and coordinates cascade detection.
+Orchestrator skill. Parses intent, applies policy, delegates all deterministic ops to the exec layer via `forge <verb>`. No pseudocode here — deterministic flows live in `bin/`.
 
 ## Key Design Principles
 
-1. **State as Source of Truth:** `.forge/state.json` (machine-readable) + `.forge/operations.jsonl` (append-only audit trail)
+1. **State as Source of Truth:** `.forge/state.json` (machine-readable)
 2. **Dispatcher Model:** Non-interactive phases run as background task agents; orchestrator displays status
-3. **Hardened Git:** Defensive initialization isolates from user config (no GPG, no hooks)
+3. **Hardened Git:** Defensive initialization isolates from user config (no GPG, no hooks) — `forge init` handles this
 4. **Feature Namespacing:** All artifacts under `.forge/features/<feature-slug>/`
-5. **Mandatory Status Display:** First output always shows phase timeline and current status (NFR-4)
-6. **Cascade Detection:** After artifact changes, invalidate downstream phases (FR-6)
+5. **Mandatory Status Display:** Bare `/forge` always runs `forge status` first (NFR-4)
+6. **Cascade Detection:** After artifact changes, invalidate downstream phases via `forge invalidate-downstream`
 7. **Anti-Phase-Jump Enforcement:** Forge NEVER permits skipping phases *within a chosen track*. Once a track is selected (Standard 12-phase or Lite 4-stage), all its stages run in strict order. No skipping, no improvised fast-paths mid-track.
-8. **Scope-Adaptive Track Selection:** At feature creation, Forge selects a track by scope. Small, well-bounded tasks may run the **Lite Lane** (4 stages) instead of the Standard 12-phase pipeline. Track choice is explicit, gated by hard criteria, and user-confirmed. This is NOT phase-jumping — the Lite Lane is a distinct, complete pipeline. (See **Scope-Adaptive Lite Lane** below.)
-9. **Caveman-Ultra Internal Artifacts:** All internal Forge artifacts (requirements, design, plans, reviews, test plans) are written in caveman-ultra to minimize tokens. Product code and user-facing documentation are ALWAYS normal prose. Safety-critical text overrides caveman. (See **Caveman-Ultra Internal Artifacts** below.)
+8. **Scope-Adaptive Track Selection:** At feature creation, Forge selects a track by scope. Small, well-bounded tasks may run the **Lite Lane** (4 stages) instead of the full 12-phase pipeline. Track choice is explicit, gated by hard criteria, and user-confirmed. (See **Scope-Adaptive Lite Lane** below.)
+9. **Caveman-Ultra Internal Artifacts:** All internal Forge artifacts are written in caveman-ultra to minimize tokens. Product code and user-facing docs are ALWAYS normal prose. (See **Caveman-Ultra Internal Artifacts** below.)
 
 **References:**
 - See [state-schema.md](./references/state-schema.md) for complete state.json structure
 - See [cascade-detector.md](./references/cascade-detector.md) for dependency graph and invalidation logic
 - See [git-hardening.md](./references/git-hardening.md) for defensive git operations
-- See [forge-logs-generator.md](./references/forge-logs-generator.md) for FORGE-LOGS.md generation
 - See [task-agent-prompt-template.md](./references/task-agent-prompt-template.md) for prompt construction
 
 ## When to Use
@@ -36,6 +35,220 @@ Main orchestrator skill implementing the dispatcher-based workflow. Manages stat
 - User asks about workflow phases or status
 - User needs to progress to next phase
 - User wants to check phase timeline or review findings
+
+## Exec-Layer Entrypoint
+
+All deterministic ops go through a single dispatcher. Locate it relative to this SKILL.md:
+
+```
+FORGE_BIN="<skill_dir>/bin/forge"
+# <skill_dir> = directory containing this SKILL.md (resolved once at runtime)
+```
+
+Invocation pattern: `$FORGE_BIN <verb> [args...]`
+
+Available verbs: `init` | `status` | `slice` | `merge` | `save` | `mark-complete` | `invalidate-downstream` | `repair` | `ref` | `archive` | `ghost-snapshot` | `ghost-diff` | `commit-phase` | `log-query` | `rollback`
+
+Never invoke `bin/lib/*.sh` directly. Workers never read `state.json` directly — only via `forge slice` / `forge ref`.
+
+## Dispatch Rule
+
+- **Bare `/forge`** (no verb): run `forge status`, then proceed to Step 3 (nudge).
+- **`/forge <verb>`** (rollback, cascade-fix, etc.): skip decorative timeline, go straight to the action.
+
+Determine invocation mode before Step 0.
+
+## On Trigger: Main Orchestrator Flow
+
+### Step 0: Git Guard (Every Invocation)
+
+On EVERY `/forge` trigger, apply defensive git config:
+
+```bash
+if [[ -d .forge/.git ]]; then
+    git -C .forge config commit.gpgsign false
+    git -C .forge config core.hooksPath /dev/null
+    git -C .forge config tag.gpgsign false
+    git -C .forge config user.name "forge"
+    git -C .forge config user.email "forge@local"
+fi
+```
+
+Rationale: git config can revert to system defaults over time. Idempotent, ~100ms.
+
+### Step 1: Workspace Initialization
+
+If `.forge/` directory NOT found:
+
+```
+→ forge init
+```
+
+`forge init` creates directories, initializes the forge git repo with hardened config, writes `state.json` (v2), and commits the initial state. Output confirms workspace created. Next: run config detection (Step 4) if `.forge/FORGE-CONFIG.md` missing.
+
+If `.forge/` found and `state.json` corrupted: offer recovery from last forge git commit:
+```bash
+git -C .forge show HEAD:state.json > .forge/state.json
+```
+
+### Step 2: Status (Mandatory for bare `/forge`)
+
+```
+→ forge status
+```
+
+`forge status` reads the active-feature thin-index slice and renders the phase timeline. If no active feature, outputs `FORGE :: NO ACTIVE FEATURE` and returns. For `/forge <verb>`, skip this step.
+
+### Step 3: Dispatch or Nudge
+
+Obtain current state from the slice (never raw state.json):
+
+```
+→ forge slice --json
+```
+
+Use `slice.track` to determine track-relative constants:
+- `max_stage` = 4 (lite) | 12 (standard)
+- `REVIEW_STAGES` = [4] (lite) | [3,5,7,9,11] (standard)
+- `stage_word` = "Stage" (lite) | "Phase" (standard)
+
+**Anti-phase-jump check (CRITICAL ORCHESTRATOR RULE):** If user requests a phase and any prerequisite is not approved/completed, REFUSE:
+
+```
+OUTPUT: "❌ PHASE JUMP BLOCKED"
+OUTPUT: "Forge policy: NO PHASE SKIPPING, regardless of task size"
+OUTPUT: "Blocker: [stage_word] <N> (<name>) is <status>, not approved"
+OUTPUT: "Next: Complete [stage_word] <N> first"
+RETURN
+```
+
+**By current phase status:**
+
+| Status | Action |
+|--------|--------|
+| `pending` (phase 1) | Nudge: "Next: Start [stage_word] 1 — [name]" |
+| `pending` (phase > 1) | Block: list incomplete prerequisites per anti-phase-jump check |
+| `in_progress` | Poll for completion (see **Polling** below) |
+| `completed` (review stage in REVIEW_STAGES) | Read gate from `→ forge ref <slug> <phase> --print`; show gate result (PASS/FAIL or ok-to-merge/needs-fix); nudge approve or iterate |
+| `completed` (non-review) | Nudge: "Proceed to next [stage_word]" |
+| `approved` (phase < max_stage) | Nudge: "Start [stage_word] <next> — <name>" |
+| `approved` (phase == max_stage) | "Feature complete! All [max_stage] [stage_word]s approved." |
+| `failed` | Show review findings from `→ forge ref <slug> <phase> --print`; nudge fix and retry |
+| `invalidated` | Nudge: "Re-run this phase or use `forge cascade-fix`" |
+
+### Step 4: Config Initialization (if needed)
+
+Called once when `.forge/FORGE-CONFIG.md` doesn't exist. Detect codebase conventions by sampling 10+ source files:
+
+1. Primary language + framework
+2. Naming conventions (camelCase/snake_case/etc., confidence ≥80% = high)
+3. Error handling patterns (try/catch, Result types, custom error classes)
+4. Logging patterns (console.log, structured logger, etc.)
+5. Test framework + location (co-located or separate) + mocking library
+6. Quality gate commands (from package.json scripts / Makefile: test, lint, build)
+
+Write `.forge/FORGE-CONFIG.md` with detected conventions. Prompt user for clarifications on low-confidence items.
+
+## Phase Dispatch
+
+When dispatching a phase to a task agent:
+
+**1. Anti-phase-jump check** — reject with message if any prerequisite phase not approved/completed.
+
+**2. Gather context** (slice + refs only, never inline skill file):
+
+```
+→ forge slice --json                          // active feature context, <1k tokens
+→ forge ref <slug> <prev_phase> --json        // carry_forward ref for handoff
+```
+
+**3. Dispatch contract (C3 — no skill-file inlining):**
+
+The worker prompt contains:
+- **Skill name** to load (e.g., `forge-requirement-analysis`). The worker loads its own SKILL.md. The orchestrator does NOT read or embed the phase skill file.
+- `forge slice` JSON (active feature, <1k tokens).
+- `forge ref` pointer(s) for input artifacts from prior phases (locator + summary; worker derefs on demand).
+- `feature_dir` absolute path and `config_path` (`.forge/FORGE-CONFIG.md`).
+- Output path: `.forge/features/<slug>/.phase-<N>-output.json`.
+- Quality gate for this phase.
+
+The worker writes its output JSON to the output path and signals completion.
+
+**4. Mark in_progress:**
+
+```
+→ forge mark-complete <slug> <phase> in_progress
+```
+
+**5. Dispatch async** to `qc-readonly` task agent. See [task-agent-prompt-template.md](./references/task-agent-prompt-template.md) for full prompt structure.
+
+**6. Poll** (see **Polling** below).
+
+## Polling for Phase Completion
+
+Poll for output file at `.forge/features/<slug>/.phase-<N>-output.json`. Interval is track-aware: review stages in REVIEW_STAGES poll more frequently. Timeout: ~30 minutes.
+
+On file detected — execute in order:
+
+```
+1. → forge merge <slug> <phase> <output-json>
+       // writes bulk NN.json FIRST (BLK-3), then updates thin index
+2. → forge mark-complete <slug> <phase> <status> --summary "<carry_forward>"
+3. → forge commit-phase <slug> <phase>          // if WS-B present
+4. If phase_output.artifacts not empty:
+       → forge invalidate-downstream <slug> <phase>   // cascade check
+       If any phases invalidated: report affected phases
+5. Display phase completion summary
+```
+
+On timeout: output "Phase <N> timed out (no output file detected)". Offer: resume / retry / cancel.
+
+## Post-Phase Validation
+
+After output file detected, before `forge merge`, validate artifact boundaries:
+
+- **Hard boundary:** All internal forge docs (REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, review files, test plans) MUST be under `.forge/features/`. Auto-correct if misplaced; report correction.
+- **Symlinks:** Check `.forge/features/` for symlinks; convert to real files.
+- **Pollution check:** Scan project repo `git status` for unexpected internal forge docs in the project working tree. Report and prompt cleanup.
+
+If index seems inconsistent: `→ forge repair`
+
+## Rollback
+
+When user requests rollback to phase N:
+
+```
+→ forge rollback <slug> <phase>
+```
+
+WARNING: Rollback permanently discards artifacts and state for all phases after N. Take note of the current phase before proceeding. If `rollback` verb is not yet available, fallback:
+```
+1. → forge invalidate-downstream <slug> <phase>
+2. git -C .forge checkout <target-commit> -- .forge/features/<slug>/
+```
+
+## Cascade
+
+On detecting artifact changes after phase completion:
+
+```
+→ forge invalidate-downstream <slug> <phase>
+```
+
+Report invalidated phases. Nudge: "Use `forge cascade-fix` to re-execute all invalidated phases in dependency order."
+
+`forge cascade-fix` re-dispatches each invalidated phase in ascending phase order, waiting for completion before advancing.
+
+## Error Cases
+
+| Situation | Action |
+|-----------|--------|
+| `state.json` corrupted | Recover: `git -C .forge show HEAD:state.json > .forge/state.json`; confirm with user |
+| Git commit timeout | Retry; if still fails, escalate to user |
+| Task agent timeout (>30 min) | Mark timed out; offer resume / retry / cancel |
+| Index/ref inconsistency | `→ forge repair` |
+
+---
 
 ## Scope-Adaptive Lite Lane
 
@@ -100,11 +313,13 @@ END FUNCTION
 
 **Status display:** the phase timeline shows 4 Lite stages instead of 12 phases when `feature.track == "lite"`. Anti-phase-jump enforcement (Principle 7) applies to whichever track is active.
 
+---
+
 ## Caveman-Ultra Internal Artifacts
 
 To minimize token usage without losing technical substance, all **internal** Forge artifacts are written in caveman-ultra.
 
-**Applies to (internal):** REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, TEST-PLAN.md, all review docs, STORY.md, BUILD-NOTES.md, VERIFY.md, FORGE-LOGS.md, operation notes, diff explanations, issue lists.
+**Applies to (internal):** REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, TEST-PLAN.md, all review docs, STORY.md, BUILD-NOTES.md, VERIFY.md, operation notes, diff explanations, issue lists.
 
 **Never caveman (always normal prose/syntax):**
 - Product/source code and code comments.
@@ -131,805 +346,9 @@ Example (inside an otherwise caveman artifact):
 > **WARNING:** The rollback step runs `DROP COLUMN is_active` and permanently deletes the column and its data. Take a database backup before applying the rollback.
 > Resume: rollback tested on staging → OK.
 
-## On Trigger: Main Orchestrator Flow
-
-### Step 0: Git Guard (Every Invocation)
-
-**On EVERY `/forge` trigger (including after init):**
-
-Apply defensive git config to prevent GPG hangs and enforce safe git settings. This runs regardless of phase status and is idempotent.
-
-```
-IF .forge/.git exists:
-    git -C .forge config commit.gpgsign false
-    git -C .forge config core.hooksPath /dev/null
-    git -C .forge config tag.gpgsign false
-    git -C .forge config user.name "forge"
-    git -C .forge config user.email "forge@local"
-```
-
-**Rationale:** Git config can revert to system defaults or user config over time. Running this guard on every invocation ensures the forge git repository stays hardened against GPG prompts and external hooks that could hang the orchestrator.
-
-**Performance:** ~100ms total (5 config operations, no I/O beyond git metadata)
-
-### Step 1: Check Workspace Initialization
-
-**If `.forge/` directory NOT found:**
-
-1. Create directory structure:
-   - `mkdir -p .forge/features/`
-   - `mkdir -p .forge/context/`
-
-2. Initialize git (DEFENSIVE — FR-1):
-   - `git init .forge`
-   - Apply defensive config:
-     ```bash
-     git -C .forge config commit.gpgsign false
-     git -C .forge config core.hooksPath /dev/null
-     git -C .forge config tag.gpgsign false
-     git -C .forge config user.name 'forge'
-     git -C .forge config user.email 'forge@local'
-     ```
-   - Create `.forge/.git/info/exclude`:
-     ```
-     # Forge internal
-     .DS_Store
-     *.tmp
-     *.swp
-     *.lock
-     .phase-*-output.json
-     .phase-*-error.json
-     ```
-
-3. Create initial `.forge/state.json` (version 1.0):
-   ```json
-   {
-     "version": "1.0",
-     "repository": {
-       "root": "/absolute/project/root",
-       "created": "ISO8601-now",
-       "git_initialized": true
-     },
-     "features": [],
-     "latest_commit": null
-   }
-   ```
-
-4. Create initial `.forge/operations.jsonl` (empty)
-
-5. Run config initialization flow (see **Config Initialization** below)
-   - If `.forge/FORGE-CONFIG.md` missing, detect codebase conventions and create it
-
-6. Generate initial FORGE-LOGS.md via [forge-logs-generator.md](./references/forge-logs-generator.md)
-
-7. Commit:
-   ```bash
-   git -C .forge add -A
-   git -C .forge commit -m "forge: init workspace"
-   ```
-
-8. Output:
-   ```
-   FORGE :: INIT
-     Workspace created
-     Config: .forge/FORGE-CONFIG.md
-     Artifacts: .forge/features/
-
-     Next: Create a new feature or drop context into .forge/features/<slug>/context/
-   ```
-
-**If `.forge/` found:**
-1. Load `.forge/state.json` (strict JSON parsing)
-2. If missing → reinitialize (idempotent)
-3. If corrupted → offer rollback to last git commit
-4. Proceed to Step 2
-
-### Step 2: Load State & Display Status (MANDATORY FIRST OUTPUT)
-
-```
-state = read_json(.forge/state.json)
-active_feature = find_active_feature(state)
-
-IF active_feature NOT found:
-    OUTPUT:
-    ```
-    FORGE :: NO ACTIVE FEATURE
-      Status: Workspace initialized but no features yet
-      Next: Create a new feature
-    ```
-    RETURN
-
-IF active_feature found:
-    current_phase = find_current_phase(active_feature)
-
-    // Track-aware pipeline length and labels
-    track = active_feature.track OR "standard"    // legacy state → standard
-    IF track == "lite":
-        stage_count = 4
-        stage_label = "Stage"                      // L1..L4: Plan, Build, Test, Review
-    ELSE:
-        stage_count = 12
-        stage_label = "Phase"
-
-    OUTPUT:
-    ```
-    FORGE :: {{ active_feature.name }}  [track: {{ track }}]
-      {{ stage_label }}: {{ current_phase.number }} of {{ stage_count }} — {{ current_phase.name }} ({{ current_phase.status }})
-      Started: {{ format_date(active_feature.created) }}
-      Current: {{ phase_status_description(current_phase) }}
-      Next: {{ next_action(current_phase) }}
-
-      Timeline:
-    ```
-
-    FOR phase_num = 1 TO stage_count:
-        phase = active_feature.phases[phase_num]
-        icon = status_icon(phase.status)
-        prefix = IF track == "lite" THEN "L" + phase_num ELSE "Phase " + phase_num
-        OUTPUT: "  {{ prefix }}:  {{ phase.name | pad(25) }}  [{{ icon }}  {{ phase.status }}]"
-
-    OUTPUT: ""
-    OUTPUT: "Artifacts: {{ count(active_feature.artifacts) }} (committed)"
-    OUTPUT: "Latest commit: {{ state.latest_commit.sha }} — {{ state.latest_commit.message }}"
-```
-
-**Phase Timeline Status Icons:**
-- `✓` = approved
-- `✓` = completed
-- `⏳` = in_progress
-- `⊘` = pending
-- `✗` = failed
-- `↻` = invalidated
-
-### Step 3: Dispatch or Nudge
-
-After mandatory status display, determine next action based on current phase status:
-
-**CRITICAL ORCHESTRATOR RULE:** If a user requests to jump to an implementation phase (4, 6, 8, 10) or skip phases, orchestrator MUST refuse with the anti-phase-jump message and explain why. This applies within either track.
-
-```
-// Track-relative constants (used throughout Step 3)
-track = active_feature.track OR "standard"
-IF track == "lite":
-    max_stage      = 4
-    REVIEW_STAGES  = [4]                 // L4 Review; gate = ok-to-merge | needs-fix
-    STAGE_NAMES    = {1:"Plan", 2:"Build", 3:"Test", 4:"Review"}
-    stage_word     = "Stage"
-ELSE:
-    max_stage      = 12
-    REVIEW_STAGES  = [3, 5, 7, 9, 11]    // gate = PASS | FAIL
-    STAGE_NAMES    = phase_names
-    stage_word     = "Phase"
-
-SWITCH current_phase.status:
-    CASE "pending":
-        IF current_phase.number == 1:
-            OUTPUT: "Next: Start requirement analysis"
-            OUTPUT: "  Use: /require-analysis (or similar)"
-        ELSE:
-            // Phases 1..N-1 are not complete; block progression to current_phase
-            OUTPUT: "Cannot start Phase {{ current_phase.number }} yet"
-            OUTPUT: "Prerequisites not met:"
-            FOR phase_num = 1 TO (current_phase.number - 1):
-                prior = active_feature.phases[phase_num]
-                IF prior.status NOT IN ["approved", "completed"]:
-                    OUTPUT: "  ✗ Phase {{ phase_num }}: {{ prior.status }}"
-            OUTPUT: ""
-            OUTPUT: "Forge enforces sequential phases — no jumping, no 'small task' exemptions"
-            OUTPUT: "Next: Complete the outstanding prerequisite phases first"
-
-    CASE "in_progress":
-        OUTPUT: "Phase in progress..."
-        CALL poll_for_completion(current_phase)
-
-    CASE "completed":
-        IF current_phase.number IN REVIEW_STAGES:  // Review stage
-            OUTPUT: "{{ stage_word }} {{ current_phase.number }} completed (review artifact produced)"
-            OUTPUT: "Review findings: "
-            IF review_findings NOT NULL:
-                OUTPUT: "  Gate: {{ review_findings.gate }}"   // PASS|FAIL (standard) or ok-to-merge|needs-fix (lite)
-                OUTPUT: "  Critical: {{ review_findings.critical }}, Major: {{ review_findings.major }}"
-            OUTPUT: "Next: Review findings and approve or iterate"
-        ELSE:
-            OUTPUT: "{{ stage_word }} {{ current_phase.number }} completed"
-            OUTPUT: "Next: Proceed to next {{ stage_word | lower }}"
-
-    CASE "approved":
-        next_phase = current_phase.number + 1
-        IF next_phase <= max_stage:
-            OUTPUT: "{{ stage_word }} {{ current_phase.number }} approved"
-            OUTPUT: "Next: Start {{ stage_word | lower }} {{ next_phase }} — {{ STAGE_NAMES[next_phase] }}"
-
-            IF next_phase IN REVIEW_STAGES:
-                OUTPUT: "Tip: Review stages can run in this conversation or separately"
-        ELSE:
-            OUTPUT: "Feature complete! All {{ max_stage }} {{ stage_word | lower }}s approved."
-
-    CASE "failed":
-        OUTPUT: "Phase {{ current_phase.number }} FAILED"
-        IF review_findings NOT NULL:
-            OUTPUT: "Review findings: "
-            OUTPUT: "  Critical: {{ review_findings.critical }}, Major: {{ review_findings.major }}"
-        OUTPUT: "Next: Fix issues and retry, or request help"
-
-    CASE "invalidated":
-        OUTPUT: "Phase {{ current_phase.number }} invalidated due to upstream change"
-        OUTPUT: "Next: Re-run this phase or use 'forge cascade-fix' to re-execute all invalidated"
-END SWITCH
-```
-
-### Step 4: Config Initialization (if needed)
-
-Called once when `.forge/FORGE-CONFIG.md` doesn't exist. Fully specified in "## Config Initialization" section (see below).
-
-```
-FUNCTION config_initialization_flow():
-    // See full spec in the "## Config Initialization" section
-    RETURN create_forge_config_md()
-END FUNCTION
-```
-
-## Phase Dispatch Pseudocode
-
-When orchestrator needs to dispatch a phase to a task agent:
-
-```
-FUNCTION dispatch_phase(feature_state, phase_number):
-    // 0. ANTI-PHASE-JUMP ENFORCEMENT
-    // Forge NEVER permits skipping phases. Every feature must progress in strict order: 1→2→...→12.
-    // If any prerequisite phase is not approved/completed, REJECT and EXPLAIN why this matters.
-    
-    FOR check_phase = 1 TO (phase_number - 1):
-        prior_phase = feature_state.phases[check_phase]
-        IF prior_phase.status NOT IN ["approved", "completed"]:
-            OUTPUT: "❌ PHASE JUMP BLOCKED"
-            OUTPUT: "Forge policy: NO PHASE SKIPPING, regardless of task size"
-            OUTPUT: ""
-            OUTPUT: "Current blocker:"
-            OUTPUT: "  Phase {{ check_phase }} ({{ PHASE_NAMES[check_phase] }}) is {{ prior_phase.status }}, not approved"
-            OUTPUT: ""
-            OUTPUT: "Why this rule exists:"
-            OUTPUT: "  • Requirement → Design → Review ensures feature scope is locked before code"
-            OUTPUT: "  • Skipping phases leads to rework, scope creep, and artifact pollution"
-            OUTPUT: "  • Small tasks are NOT exempt — all features follow the full pipeline"
-            OUTPUT: ""
-            OUTPUT: "Next step: Complete phase {{ check_phase }} first, then return here"
-            RETURN {success: false, reason: "prerequisite_phase_incomplete"}
-    
-    // 1. All prerequisites satisfied; proceed
-    // 2. Resolve skill file and read full content (E2: Skill Content Inlining)
-    skill_name = PHASE_SKILLS[phase_number]
-    skill_file_path = resolve_path("skills/" + skill_name + "/SKILL.md")
-
-    IF NOT file_exists(skill_file_path):
-        OUTPUT: "ERROR: Skill file not found: " + skill_file_path
-        RETURN {success: false, reason: "skill_not_found"}
-
-    skill_content = READ_FILE(skill_file_path)  // Read entire file verbatim
-    instructions_md = skill_content  // Embed full SKILL.md content (not reference or summary)
-
-    // 3. Construct task agent prompt with absolute paths
-    prompt = construct_agent_prompt(
-        feature_name: feature_state.name,
-        phase_number: phase_number,
-        phase_name: PHASE_NAMES[phase_number],
-        feature_dir: feature_state.root_dir,  // absolute path
-        config_path: ".forge/FORGE-CONFIG.md",  // absolute path
-        input_artifacts: resolve_input_artifacts(feature_state, phase_number),
-        output_path: compute_output_path(feature_state, phase_number),
-        instructions_md: instructions_md,  // Full skill content embedded
-        quality_gate: PHASE_QUALITY_GATES[phase_number]
-    )
-    // See [task-agent-prompt-template.md](./references/task-agent-prompt-template.md) for full template
-
-    // 4. Mark phase as in_progress
-    feature_state.phases[phase_number].status = "in_progress"
-    feature_state.phases[phase_number].started = ISO8601_NOW()
-
-    // 5. Dispatch to qc-readonly task agent
-    // Orchestrator yields control; task agent executes asynchronously
-    DISPATCH_ASYNC(qc_readonly, prompt)
-
-    // 6. Poll for completion
-    poll_result = poll_for_completion(feature_state, phase_number)
-
-    IF poll_result.success:
-        RETURN {success: true}
-    ELSE:
-        RETURN {success: false, reason: poll_result.reason}
-END FUNCTION
-```
-
-## Post-Phase Validation (E3: Enforcement)
-
-Before marking phase complete and merging output into state, orchestrator validates artifacts and output structure. This prevents broken artifacts (symlinks, out-of-boundary files) from corrupting the state.
-
-```
-FUNCTION post_phase_validation(phase_number, phase_output):
-    // Called after orchestrator reads .phase-N-output.json but BEFORE merge_phase_output()
-
-    // ARTIFACT BOUNDARY ENFORCEMENT (Hard Rule)
-    // ALL forge artifacts (requirements, design, plans, reviews, test plans, docs) MUST live under .forge/
-    // ONLY actual product code and user-requested end-user docs go in the project working tree.
-    // This prevents phase-jumping agents from polluting the project git with internal forge files.
-
-    // Check 1: No symlinks in feature directory
-    symlinks = find_all(".forge/features/", type="symlink")
-    IF symlinks not empty:
-        OUTPUT: "⚠ Symlinks detected in feature directory. Converting to real files."
-        FOR each symlink IN symlinks:
-            target = readlink(symlink)
-            cp --dereference(target, symlink.tmp)
-            rm(symlink)
-            mv(symlink.tmp, symlink)
-            OUTPUT: "  ✓ Converted: " + symlink
-
-    // Check 2: All artifacts MUST be under .forge/features/ (Hard Boundary)
-    // Phases 8, 10, 12 may generate product code outside .forge/, but NEVER internal forge docs
-    FOR each artifact IN phase_output.artifacts:
-        // If artifact is an internal forge doc (REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, review files, etc.)
-        is_internal_doc = artifact.name IN ["REQUIREMENTS.md", "DESIGN.md", "IMPL-PLAN.md", 
-                                            "IMPL-REVIEW.md", "TEST-PLAN.md", "TEST-REVIEW.md", 
-                                            "CODE-REVIEW.md", "TEST-CODE-REVIEW.md"]
-        
-        IF is_internal_doc AND NOT artifact.path starts_with(".forge/features/"):
-            OUTPUT: "❌ ARTIFACT BOUNDARY VIOLATION"
-            OUTPUT: "Artifact: " + artifact.name
-            OUTPUT: "Found: " + artifact.path
-            OUTPUT: ""
-            OUTPUT: "Forge Rule (Hard):"
-            OUTPUT: "  ALL internal artifacts (requirements, design, plans, reviews) MUST be under .forge/"
-            OUTPUT: "  This includes: REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, test/review docs"
-            OUTPUT: "  Do NOT put them in the project working tree"
-            OUTPUT: ""
-            correct_path = compute_correct_path(artifact.path, phase_number)
-            MOVE(artifact.path, correct_path)
-            artifact.path = correct_path
-            OUTPUT: "  ✓ Auto-corrected to: " + correct_path
-        
-        // For product code in phases 8, 10: verify it's in /src or /lib, not root
-        IF phase_number IN [8, 10]:
-            IF NOT (artifact.path starts_with(".forge/") OR 
-                    artifact.path starts_with("src/") OR 
-                    artifact.path starts_with("lib/") OR
-                    artifact.path matches production_file_patterns()):
-                OUTPUT: "⚠ Check: Product code in unusual location: " + artifact.path
-                OUTPUT: "  (Phase {{ phase_number }} may intentionally place code here — OK if reviewed)"
-
-    // Check 3: No spurious forge docs in project repo
-    project_repo_status = git_status(".")  // Parent repo (not .forge/.git)
-    unexpected_internal_docs = []
-    FOR each untracked_file IN project_repo_status.untracked_files:
-        IF untracked_file matches ["*REQUIREMENTS.md", "*DESIGN.md", "*IMPL-PLAN.md", "*REVIEW.md"]:
-            unexpected_internal_docs.append(untracked_file)
-    
-    IF unexpected_internal_docs not empty:
-        OUTPUT: "⚠ ARTIFACT POLLUTION DETECTED"
-        OUTPUT: "Internal forge docs found in project repo (should be under .forge/):"
-        FOR each doc IN unexpected_internal_docs:
-            OUTPUT: "  - " + doc
-        OUTPUT: ""
-        OUTPUT: "This happens when agents phase-jump and improvise files outside .forge/"
-        OUTPUT: "Action: Move these to .forge/features/<slug>/ or remove."
-
-    RETURN phase_output  // Modified if auto-fixes applied
-END FUNCTION
-```
-
-### Polling for Phase Completion
-
-Helper function for asynchronous phase monitoring:
-
-```
-FUNCTION poll_for_completion(feature_state, phase_number):
-    // 1. Set polling parameters
-    POLL_INTERVAL = IF phase_number IN [3, 5, 7, 9, 11] THEN 2_seconds ELSE 5_seconds
-    MAX_RETRIES = 360  // 360 * 5s = ~30 minutes; 360 * 2s = ~12 minutes for review phases
-    attempt = 0
-
-    // 2. Compute expected output file path
-    output_file_path = compute_phase_output_path(feature_state, phase_number)
-    // Expected: /absolute/path/.forge/features/<slug>/.phase-{N}-output.json
-
-    // 3. Poll loop
-    WHILE attempt < MAX_RETRIES:
-        attempt = attempt + 1
-        SLEEP(POLL_INTERVAL)
-
-        // 4. Check if phase output file exists
-        IF file_exists(output_file_path):
-            // 5. Read and validate the output file
-            result = read_phase_output_file(output_file_path, phase_number)
-            IF NOT result.success:
-                OUTPUT: "Error reading phase output: {{ result.error }}"
-                RETURN {success: false, reason: "corrupted_output"}
-
-            phase_output = result.data
-
-            // 6. Validate outputs (E3: Post-Phase Validation)
-            phase_output = post_phase_validation(phase_number, phase_output)
-
-            // 7. Merge task agent output into state
-            merge_result = merge_phase_output(feature_state, phase_number, phase_output)
-            IF NOT merge_result.success:
-                OUTPUT: "Error merging phase output: {{ merge_result.error }}"
-                RETURN {success: false, reason: "merge_failed"}
-
-            // 8. Update state.json atomically
-            save_result = save_state_atomic(feature_state, {
-                op: "phase_complete",
-                phase: phase_number,
-                status: phase_output.status
-            })
-            IF NOT save_result.success:
-                OUTPUT: "Error saving state: {{ save_result.error }}"
-                RETURN {success: false, reason: "state_save_failed"}
-
-            // 9. Generate FORGE-LOGS.md from state
-            regenerate_forge_logs(feature_state)
-
-            // 10. Commit to forge git
-            commit_result = commit_phase_artifacts(phase_number, phase_output.status)
-            IF NOT commit_result.success:
-                OUTPUT: "Error committing to forge git: {{ commit_result.error }}"
-                RETURN {success: false, reason: "git_commit_failed"}
-
-            // 11. Run cascade detection if artifacts changed
-            IF phase_output.artifacts not empty:
-                affected = detect_affected(phase_output.artifacts[0].path, feature_state)
-                IF affected.downstream not empty:
-                    OUTPUT: "Cascade detection: phases {{ affected.downstream }} affected"
-                    invalidate_downstream_phases(feature_state, phase_number)
-
-            // 12. Display phase completion summary
-            display_phase_completion(phase_number, phase_output)
-
-            RETURN {success: true, phase_output: phase_output}
-
-    // Timeout reached
-    OUTPUT: "Phase {{ phase_number }} timed out after {{ MAX_RETRIES * POLL_INTERVAL }}s (no output file detected)"
-    RETURN {success: false, reason: "timeout"}
-END FUNCTION
-
-FUNCTION read_phase_output_file(output_file_path, expected_phase):
-    // 1. Read file
-    IF NOT file_exists(output_file_path):
-        RETURN {success: false, error: "file not found"}
-
-    raw_json = read_file(output_file_path)
-
-    // 2. Parse JSON
-    result = parse_json_safe(raw_json)
-    IF NOT result.success:
-        RETURN {success: false, error: "invalid JSON: {{ result.error }}"}
-
-    phase_output = result.data
-
-    // 3. Validate structure
-    required_fields = ["phase", "status", "artifacts", "execution_details"]
-    FOR field IN required_fields:
-        IF NOT field IN phase_output:
-            RETURN {success: false, error: "missing field: {{ field }}"}
-
-    // 4. Validate phase number matches
-    IF phase_output.phase != expected_phase:
-        RETURN {success: false, error: "phase mismatch (expected {{ expected_phase }}, got {{ phase_output.phase }})"}
-
-    // 5. Validate status
-    valid_statuses = ["completed", "approved", "failed"]
-    IF NOT phase_output.status IN valid_statuses:
-        RETURN {success: false, error: "invalid status: {{ phase_output.status }}"}
-
-    RETURN {success: true, data: phase_output}
-END FUNCTION
-```
-
-## Status Display Commands
-
-### `forge status`
-
-Display current phase and timeline (no artifacts).
-
-```
-Output:
-  FORGE :: [Feature Name]
-    Phase: [N] of [max_stage] — [Phase Name] ([status])   // max_stage = 12 standard, 4 lite
-    Started: [date]
-    Current: [brief status]
-    Next: [action]
-
-    Phase Timeline:
-      Phase 1  — Requirement Analysis    [✓ approved]
-      Phase 2  — Design Creation         [✓ approved]
-      Phase 3  — Design Review           [✓ approved]
-      Phase 4  — Implementation Planning [⏳ in_progress]
-      Phases 5-12 [⊘ pending]
-
-    Artifacts: 4 (committed)
-    Latest commit: [SHA] — [message]
-```
-
-### `forge report`
-
-Display all review findings aggregated by phase.
-
-```
-Output:
-  FORGE :: Review Report — [Feature Name]
-
-  Phase 3: Design Review
-    Round 1 — PASSED
-    - CRITICAL: 0
-    - MAJOR: 0
-    - MINOR: 2
-      - Unused import in AuthMiddleware
-      - Missing JSDoc for error handler
-    - SUGGESTION: 1
-
-  Aggregate:
-    - Critical issues: 0 (PASS)
-    - Major issues: 0 (PASS)
-    - Minor issues: 2
-    - Suggestions: 1
-```
-
-### `forge affected <artifact-path>`
-
-Show impact analysis for a changed artifact using cascade detector.
-
-```
-Output:
-  Changed: .forge/features/auth-middleware/design/DESIGN.md
-
-  Downstream impacts (depends on changed artifact):
-    Phase 4: Implementation Planning → INVALIDATED
-    Phase 6: Test Planning → INVALIDATED
-    Phase 8: Code Implementation → INVALIDATED
-    Phase 10: Test Implementation → INVALIDATED
-
-  Upstream impacts (changed artifact depends on these):
-    Phase 1: Requirements → marked for re-review
-
-  Suggested action: Run "forge cascade-fix" to re-execute all invalidated phases
-```
-
-### `forge cascade-fix`
-
-Automatically re-run all invalidated phases in dependency order.
-
-```
-Process:
-  1. Find all phases with status="invalidated"
-  2. Order by phase number (lowest first; respects dependencies)
-  3. For each phase in order:
-     - Dispatch to task agent
-     - Wait for completion
-     - Update state.json
-     - Detect cascade for new artifacts
-     - Continue to next phase
-
-Output:
-  Invalidated phases found: 4
-  Re-executing in order: Phase 4, 6, 8, 10
-
-  [Polling...]
-  ✓ Phase 4: Implementation Planning [✓ approved]
-  ✓ Phase 6: Test Planning [✓ approved]
-  ✓ Phase 8: Code Implementation [✓ approved]
-  ✓ Phase 10: Test Implementation [✓ approved]
-
-  Cascade fix complete.
-```
-
-## Rollback Operation
-
-When user requests rollback (e.g., after review failures):
-
-```
-FUNCTION rollback_to_phase(target_phase_number):
-    state = load_state()
-
-    // 1. Find target phase SHA in git
-    target_commit = find_commit_for_phase(target_phase_number)
-
-    IF target_commit NOT found:
-        OUTPUT: "No commit found for phase {{ target_phase_number }}"
-        RETURN {success: false}
-
-    // 2. Acquire lock on state.json
-    lock_file = ".forge/state.json.lock"
-    ACQUIRE_LOCK(lock_file, timeout: 30_seconds)
-
-    // 3. Mark downstream phases as invalidated
-    FOR phase_num FROM (target_phase_number + 1) TO 12:
-        state.phases[phase_num].status = "invalidated"
-        state.phases[phase_num].completed = null
-        state.phases[phase_num].artifacts = []
-
-    // 4. Atomic write state.json (temp + rename)
-    save_state_atomic(state, {
-        op: "phase_rollback",
-        target_phase: target_phase_number,
-        invalidated_phases: [target_phase_number + 1, ..., 12]
-    })
-
-    // 5. Git checkout to restore artifacts
-    RUN("git -C .forge checkout {{ target_commit }} -- .forge/features/")
-
-    // 6. Release lock
-    RELEASE_LOCK(lock_file)
-
-    // 7. Regenerate FORGE-LOGS.md and commit
-    regenerate_forge_logs(state)
-    commit_phase_artifacts(target_phase_number, "rollback")
-
-    OUTPUT: "Rolled back to phase {{ target_phase_number }}"
-    OUTPUT: "Invalidated phases: {{ invalidated_phases }}"
-```
-
-## State Management
-
-All state mutations follow atomic semantics via the StateManager component:
-
-### State Manager Helper Methods
-
-The orchestrator implements the following helper methods (pseudocode):
-
-```
-FUNCTION load_state():
-    // 1. Check if .forge/state.json exists
-    IF NOT file_exists(".forge/state.json"):
-        RETURN {success: false, error: "state.json not found"}
-
-    // 2. Read and parse JSON
-    raw_json = read_file(".forge/state.json")
-    state = parse_json(raw_json)
-
-    // 3. Validate schema (version, features array, phases object)
-    IF state.version != "1.0":
-        RETURN {success: false, error: "unsupported state version"}
-
-    RETURN {success: true, state: state}
-END FUNCTION
-
-FUNCTION save_state_atomic(state, operation_record):
-    // 1. Write to temp file
-    temp_file = ".forge/state.json.tmp." + random_hex(8)
-    write_json(temp_file, state)
-
-    // 2. Atomic rename (POSIX filesystems)
-    atomic_rename(temp_file, ".forge/state.json")
-
-    // 3. Append to operations.jsonl (audit trail)
-    operation = {
-        ts: ISO8601_NOW(),
-        op: operation_record.op,
-        phase: operation_record.phase,
-        ...operation_record
-    }
-    append_jsonl(".forge/operations.jsonl", operation)
-
-    RETURN {success: true}
-END FUNCTION
-
-FUNCTION mark_phase_complete(state, phase_number, phase_output):
-    // 1. Update phase status
-    state.phases[phase_number].status = phase_output.status  // "completed", "approved", or "failed"
-    state.phases[phase_number].completed = ISO8601_NOW()
-
-    // 2. Merge artifacts from .phase-N-output.json
-    IF phase_output.artifacts:
-        state.phases[phase_number].artifacts = phase_output.artifacts
-        FOR artifact IN phase_output.artifacts:
-            // Add to global artifacts array (dedup by path)
-            IF NOT artifact_exists_in_state(artifact.path):
-                state.artifacts.append(artifact)
-
-    // 3. Merge decisions
-    IF phase_output.decisions:
-        state.phases[phase_number].decisions = phase_output.decisions
-
-    // 4. For review phases, merge review_findings
-    IF phase_number IN [3, 5, 7, 9, 11] AND phase_output.review_findings:
-        state.phases[phase_number].review_findings = phase_output.review_findings
-
-    // 5. Merge execution_details for telemetry
-    IF phase_output.execution_details:
-        state.phases[phase_number].execution_details = phase_output.execution_details
-
-    RETURN state
-END FUNCTION
-
-FUNCTION merge_phase_output(state, phase_number, phase_output_json):
-    // Called after orchestrator reads .phase-N-output.json from task agent
-    // 1. Parse the phase output file
-    phase_output = parse_json(phase_output_json)
-
-    // 2. Validate structure
-    IF phase_output.phase != phase_number:
-        RETURN {success: false, error: "phase mismatch"}
-
-    // 3. Update state using mark_phase_complete
-    updated_state = mark_phase_complete(state, phase_number, phase_output)
-
-    // 4. Save atomically
-    save_state_atomic(updated_state, {
-        op: "phase_complete",
-        phase: phase_number,
-        status: phase_output.status
-    })
-
-    // 5. Clean up temp output file
-    delete_file(".phase-{{ phase_number }}-output.json")
-
-    RETURN {success: true, state: updated_state}
-END FUNCTION
-
-FUNCTION invalidate_downstream_phases(state, changed_phase):
-    // Called after cascade detection finds affected phases
-    FOR phase_num FROM (changed_phase + 1) TO 12:
-        IF state.phases[phase_num].status NOT IN ["pending", "invalidated"]:
-            state.phases[phase_num].status = "invalidated"
-            state.phases[phase_num].artifacts = []
-            state.phases[phase_num].decisions = []
-
-    RETURN state
-END FUNCTION
-```
-
-## Config Initialization
-
-Detailed flow for `config_initialization_flow()`:
-
-1. **Language detection:**
-   - Sample 10+ source files
-   - Identify primary language (by file count)
-   - Detect framework(s)
-   - Identify package manager (package.json, requirements.txt, Cargo.toml, etc.)
-
-2. **Naming conventions:**
-   - Sample function/class names across 10+ files
-   - Detect pattern (camelCase, snake_case, kebab-case, PascalCase)
-   - Compute confidence (>80% = high)
-
-3. **Error handling:**
-   - Scan 10+ files for error patterns
-   - Detect: try/catch, Result types, custom error classes, error handlers
-   - Example: "TypeScript with typed errors extending AppError"
-
-4. **Logging patterns:**
-   - Scan 10+ files for log calls
-   - Detect: console.log, logger.info, slog, logging library
-   - Example: "winston logger with INFO as default"
-
-5. **Test framework:**
-   - Check package.json for test scripts
-   - Detect: jest, vitest, mocha, pytest, etc.
-   - Identify test location (co-located or separate)
-   - Detect mocking library: jest.mock, MSW, unittest.mock, etc.
-
-6. **Quality gate commands:**
-   - From package.json: `scripts.test`, `scripts.lint`, `scripts.build`
-   - From Makefile: test, lint, check targets
-   - Example: `pnpm test && pnpm build && pnpm lint`
-
-7. **Write FORGE-CONFIG.md:**
-   - Store all detected conventions
-   - Include auto-detected confidence levels
-   - Prompt user for clarifications on low-confidence items
+---
 
 ## Glossary & Phase Names
-
-### Track Relativity (Normative)
-
-All phase-count and review-set literals in the pseudocode below (`1 TO 12`, `<= 12`, `[3, 5, 7, 9, 11]`) are written for the **Standard track**. They are shorthand for the track-relative constants defined in Step 3:
-
-- `max_stage` — 12 (standard) | 4 (lite)
-- `REVIEW_STAGES` — `[3,5,7,9,11]` (standard) | `[4]` (lite)
-- Loops `FOR n = 1 TO 12`, `FOR n FROM x TO 12`, and checks `<= 12` → use `max_stage`.
-- Membership `IN [3,5,7,9,11]` → use `IN REVIEW_STAGES`.
-
-Every function (dispatch_phase, poll_for_completion, rollback_to_phase, invalidate_downstream_phases, mark_phase_complete) applies these substitutions when the active feature's `track == "lite"`.
 
 ### Standard Track — 12 phases in order:
 
@@ -957,113 +376,13 @@ Every function (dispatch_phase, poll_for_completion, rollback_to_phase, invalida
 | L3 | Test | task_agent | gate (all checks PASS) |
 | L4 | Review | task_agent | gate (ok-to-merge \| needs-fix) |
 
-## Edge Cases & Error Handling
-
-### State.json Corrupted
-- Read last commit from git: `git -C .forge show HEAD:state.json > .forge/state.json`
-- Offer user: "Recovered from git. Check accuracy and confirm."
-
-### Git Timeout on Commit
-- Default timeout: 5 seconds
-- If timeout: retry with `--no-gpg-sign` flag
-- If still fails: escalate to user
-
-### Lock Acquisition Timeout
-- If lock held > 5 minutes: assume stale, overwrite
-- If lock held < 5 minutes: wait for release
-- Max wait: 30 seconds
-
-### Task Agent Timeout
-- If phase takes > 30 minutes: mark as timed out
-- Offer user: "Resume, retry, or cancel"
-
-## Integration Points
-
-**Called by orchestrator:**
-1. `initialize_workspace()` — First trigger if .forge/ missing
-2. `load_state()` — Every trigger
-3. `display_status()` — Mandatory first output
-4. `dispatch_phase(phase_num)` — When user asks to progress
-5. `detect_affected(artifact)` — After artifact changes
-6. `mark_invalidated(phases)` — After cascade detection
-7. `rollback_to_phase(phase_num)` — On user request
-
-**References (see linked specs):**
-- [state-schema.md](./references/state-schema.md) — state.json structure
-- [cascade-detector.md](./references/cascade-detector.md) — dependency graph and cascade rules
-- [git-hardening.md](./references/git-hardening.md) — defensive git init and rollback
-- [forge-logs-generator.md](./references/forge-logs-generator.md) — FORGE-LOGS.md generation
-- [task-agent-prompt-template.md](./references/task-agent-prompt-template.md) — prompt construction
-
 ## Implementation Assumptions
 
 1. **Single Active Feature:** Currently one feature per state.json (architecture supports multi-feature via `.features[]` array)
 2. **Absolute Paths:** All paths in state.json and prompts are absolute (no relative resolution)
 3. **Idempotent Operations:** All initialization functions can be re-run safely
-4. **Atomic Filesystem:** Temp file + rename is atomic on POSIX filesystems (Linux, macOS)
-5. **Task Agent Dispatch:** Task agents can be dispatched asynchronously; orchestrator polls for completion
-6. **Read-Only Task Agents:** Task agents use `qc-readonly` model (enforced write-only to artifacts)
-7. **NO PHASE SKIPPING (within a track):** Orchestrator ALWAYS enforces sequential progression within the active track — Standard = 1→2→…→12, Lite = L1→L2→L3→L4. No jumps, no improvised fast-paths mid-track. Track is chosen once at creation (Standard default; Lite only when all gates pass and user confirms) and is immutable for the feature. Violation → explicit refusal with detailed reason.
-8. **Track Immutability:** A feature's `track` cannot change mid-flight. A scope change that breaks Lite gates requires closing the feature and re-creating it on the Standard track.
-
-## Workflow Summary
-
-```
-User: /forge
-
-IF .forge/ not exist:
-  INIT workspace
-  Create state.json, operations.jsonl, git
-  Run config detection
-  COMMIT initial state
-
-LOAD state.json
-DISPLAY status dashboard (MANDATORY)
-
-IF no active feature:
-  OUTPUT: "No feature yet"
-  RETURN
-
-// TRACK SELECTION (at feature creation only)
-IF feature just created:
-  track = select_track(feature_context)   // "standard" (12 phases) | "lite" (4 stages)
-  // Lite requires ALL gates: ≤3 files, clear criteria, no arch/API/security change, user-confirmed
-  // On any gate fail or uncertainty → standard. See "Scope-Adaptive Lite Lane".
-
-// Pipeline length depends on track: standard = 12 phases, lite = 4 stages (L1..L4)
-// Anti-phase-jump enforcement applies within whichever track is active.
-
-IF phase pending:
-  // ANTI-PHASE-JUMP CHECK
-  IF phase_number > 1 AND prerequisite phases NOT complete:
-    OUTPUT: "❌ Cannot start — prerequisites incomplete"
-    OUTPUT: "Forge: NO PHASE SKIPPING (applies to all tasks)"
-    RETURN
-  NUDGE: "Ready to start phase N"
-
-IF phase in_progress:
-  POLL for completion
-
-IF phase completed/approved:
-  DISPLAY: Review findings (if review phase)
-  NUDGE: "Ready for next phase"
-
-IF phase failed:
-  DISPLAY: Findings
-  NUDGE: "Fix and retry"
-
-IF phase invalidated:
-  NUDGE: "Re-run this phase or use forge cascade-fix"
-
----
-ARTIFACT BOUNDARY ENFORCEMENT (Throughout Workflow):
-  • All forge internals (REQUIREMENTS.md, DESIGN.md, IMPL-PLAN.md, reviews, test plans) → .forge/
-  • Product code (phases 8, 10) → src/, lib/, or project structure
-  • NEVER put forge docs in project working tree
-```
-
----
-
-**Status:** Complete orchestrator rewrite for dispatcher architecture
-**Version:** 2.0 (Dispatcher Model)
-**Created:** 2026-04-10
+4. **Atomic Filesystem:** Handled by exec layer (temp file + rename, POSIX atomic)
+5. **Task Agent Dispatch:** Task agents dispatched asynchronously; orchestrator polls output file
+6. **Read-Only Task Agents:** Task agents use `qc-readonly` model (write-only to their output artifact)
+7. **NO PHASE SKIPPING (within a track):** Standard = 1→2→…→12, Lite = L1→L2→L3→L4. Violation → explicit refusal with detailed reason.
+8. **Track Immutability:** A feature's `track` cannot change mid-flight. Scope change → close feature, re-create on Standard track.
