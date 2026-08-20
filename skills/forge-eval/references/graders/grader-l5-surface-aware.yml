@@ -1,0 +1,15 @@
+id: grader-l5-surface-aware
+level: 5
+description: Verify review findings cite public API surface, not internals (correctness patterns)
+rules:
+  - id: rule-findings-on-public-surface
+    check: surface_aware
+    review_file: design/DESIGN-REVIEW-1.md
+    public_symbols:
+      - run_grader
+      - run_graders_selftest
+      - check_file_exists
+      - check_symbol_defined
+      - check_no_secrets_pattern
+      - check_proof_of_work
+    threshold: 0.8

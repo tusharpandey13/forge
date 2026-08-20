@@ -1,0 +1,19 @@
+id: grader-l2-symbol-defined
+level: 2
+description: Verify no undefined symbol references (hallucination absence)
+rules:
+  - id: rule-run-grader-function
+    check: symbol_defined
+    symbol: run-grader
+    source_file: bin/run-grader.sh
+    threshold: 1.0
+  - id: rule-jq-dependency
+    check: symbol_defined
+    symbol: jq
+    source_file: bin/run-grader.sh
+    threshold: 1.0
+  - id: rule-yq-dependency
+    check: symbol_defined
+    symbol: yq
+    source_file: bin/run-grader.sh
+    threshold: 1.0

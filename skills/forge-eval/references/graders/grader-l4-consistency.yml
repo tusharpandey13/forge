@@ -1,0 +1,10 @@
+id: grader-l4-consistency
+level: 4
+description: Verify plan/impl/tests consistency (structural alignment)
+rules:
+  - id: rule-plan-impl-tests-match
+    check: plan_impl_tests_consistency
+    plan_path: plan/IMPL-PLAN.md
+    impl_path: bin/
+    tests_path: tests/
+    threshold: 1.0

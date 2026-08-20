@@ -32,11 +32,19 @@ out_error() {
   exit 1
 }
 
+validate_slug() {
+  local slug="$1"
+  if [[ ! "$slug" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    out_error "invalid slug '${slug}': must match ^[A-Za-z0-9_-]+\$"
+  fi
+}
+
 # ── verb: ref ─────────────────────────────────────────────────────────────────
 cmd_ref() {
   [[ $# -ge 1 ]] || out_error "usage: forge ref <slug> <phase-or-name> [--print] [--write <bulk-json>]"
 
   local slug="${1:-}" key="${2:-}"
+  validate_slug "$slug"
   shift 2 || out_error "usage: forge ref <slug> <phase-or-name> [--print] [--write <bulk-json>]"
 
   local do_print=0

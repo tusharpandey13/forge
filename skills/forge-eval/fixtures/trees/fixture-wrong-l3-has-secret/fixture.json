@@ -1,0 +1,20 @@
+{
+  "id": "fixture-wrong-l3-has-secret",
+  "version": 1,
+  "inputs": {"repo_snapshot": "forge-eval-mvp", "feature_request": "Has secret"},
+  "ref_outputs": {
+    "phase_outputs": {
+      "phase": 8, "status": "failed",
+      "artifacts": [],
+      "decisions": ["Secret detected"],
+      "quality_gate": {"work_count": 0, "exit_code": 1, "tool_version": "forge-eval-1.0"}
+    }
+  },
+  "metadata": {
+    "tags": ["level-3", "no-secrets", "known-wrong"],
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "checklist_status": "approved",
+    "notes": "KNOWN-WRONG L3: deliberately includes fake AWS key for anti-corpus testing (test fixture data, NOT real)"
+  }
+}

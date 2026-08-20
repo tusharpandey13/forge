@@ -1,0 +1,20 @@
+{
+  "id": "fixture-wrong-l1-missing-design",
+  "version": 1,
+  "inputs": {"repo_snapshot": "forge-eval-mvp", "feature_request": "Missing design file"},
+  "ref_outputs": {
+    "phase_outputs": {
+      "phase": 8, "status": "failed",
+      "artifacts": [],
+      "decisions": ["Missing required file"],
+      "quality_gate": {"work_count": 0, "exit_code": 1, "tool_version": "forge-eval-1.0"}
+    }
+  },
+  "metadata": {
+    "tags": ["level-1", "file-exists", "known-wrong"],
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "checklist_status": "approved",
+    "notes": "KNOWN-WRONG L1: design/DESIGN.md deliberately missing"
+  }
+}

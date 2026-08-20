@@ -1,0 +1,16 @@
+id: grader-l5-tautology-heuristic
+level: 5
+description: Regex heuristic for tautological test detection (correctness patterns)
+rules:
+  - id: rule-test-has-code-symbol
+    check: tautology_heuristic
+    test_file_glob: "tests/*.test.ts"
+    require_code_symbol_reference: true
+    min_assertions_with_code_symbol: 1
+    supported_languages:
+      - javascript
+      - typescript
+      - python
+    fn_rate_estimate: 0.05
+    fp_rate_estimate: 0.02
+    threshold: 0.9

@@ -37,6 +37,13 @@ out_error() {
   exit 1
 }
 
+validate_slug() {
+  local slug="$1"
+  if [[ ! "$slug" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    out_error "invalid slug '${slug}': must match ^[A-Za-z0-9_-]+\$"
+  fi
+}
+
 # Returns project repo root (user's .git, NOT .forge/.git)
 find_project_git_root() {
   local dir="$FORGE_PROJECT_ROOT"
@@ -58,6 +65,7 @@ find_project_git_root() {
 cmd_rollback() {
   [[ $# -ge 2 ]] || out_error "usage: forge rollback <slug> <N> [--tree-restore]"
   local slug="$1" target_phase="$2"
+  validate_slug "$slug"
   shift 2
 
   local tree_restore=0
@@ -146,8 +154,6 @@ PYEOF
   # Optional: tree-restore (destructive — requires explicit flag)
   local tree_restore_result=""
   if [[ "$tree_restore" -eq 1 ]]; then
-    printf 'forge/rollback: WARNING: this overwrites uncommitted project changes. Proceeding (--tree-restore was given).\n' >&2
-
     if [[ -z "$proj_root" ]] && ! proj_root="$(find_project_git_root 2>/dev/null)"; then
       out_error "tree-restore: no project git repo found"
     fi
@@ -158,13 +164,22 @@ PYEOF
     git -C "$proj_root" rev-parse --verify "$ghost_sha" >/dev/null 2>&1 \
       || out_error "tree-restore: ghost SHA ${ghost_sha} not found in project repo"
 
-    # Restore working tree from ghost snapshot tree without touching HEAD
+    # Restore working tree from ghost snapshot tree without touching HEAD or the
+    # real git index. Uses a temp index so `git status` shows NO staged changes.
     local ghost_tree
     ghost_tree="$(git -C "$proj_root" rev-parse "${ghost_sha}^{tree}")"
-    git -C "$proj_root" read-tree "$ghost_tree"
-    git -C "$proj_root" checkout-index -a -f
 
-    tree_restore_result="project working tree restored from ghost snapshot ${ghost_sha}"
+    local tmp_idx
+    tmp_idx="$(mktemp)"
+    # shellcheck disable=SC2064
+    trap "rm -f '${tmp_idx}'" RETURN
+
+    GIT_INDEX_FILE="$tmp_idx" git -C "$proj_root" read-tree "$ghost_tree"
+    GIT_INDEX_FILE="$tmp_idx" git -C "$proj_root" checkout-index -a -f --prefix="${proj_root}/"
+    rm -f "$tmp_idx"
+
+    tree_restore_result="project working tree restored from ghost snapshot ${ghost_sha} (index NOT staged)"
+    printf 'forge/rollback: WARNING: this overwrites working-tree files but does NOT stage anything.\n' >&2
     printf 'forge/rollback: %s\n' "$tree_restore_result"
   fi
 

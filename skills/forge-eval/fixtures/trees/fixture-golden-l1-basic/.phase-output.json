@@ -1,0 +1,14 @@
+{
+  "phase": 8,
+  "status": "completed",
+  "artifacts": [
+    {"path": "design/DESIGN.md", "sha": "abc123def456", "size_bytes": 2048},
+    {"path": "plan/IMPL-PLAN.md", "sha": "fedcba654321", "size_bytes": 1024}
+  ],
+  "decisions": ["All L1 files present", "Fixture ready for grading"],
+  "quality_gate": {
+    "work_count": 3,
+    "exit_code": 0,
+    "tool_version": "forge-eval-1.0.0"
+  }
+}

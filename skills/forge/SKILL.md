@@ -47,7 +47,7 @@ FORGE_BIN="<skill_dir>/bin/forge"
 
 Invocation pattern: `$FORGE_BIN <verb> [args...]`
 
-Available verbs: `init` | `status` | `slice` | `merge` | `save` | `mark-complete` | `invalidate-downstream` | `repair` | `ref` | `archive` | `ghost-snapshot` | `ghost-diff` | `commit-phase` | `log-query` | `rollback`
+Available verbs: `init` | `status` | `slice` | `merge` | `save` | `mark-complete` | `invalidate-downstream` | `repair` | `ref` | `archive` | `ghost-snapshot` | `ghost-diff` | `ghost-guard` | `commit-phase` | `log-query` | `rollback` | `metadata` | `autowrite-phase` | `cascade-fix`
 
 Never invoke `bin/lib/*.sh` directly. Workers never read `state.json` directly — only via `forge slice` / `forge ref`.
 

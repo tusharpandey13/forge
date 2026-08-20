@@ -1,0 +1,20 @@
+{
+  "id": "fixture-golden-l4-consistency",
+  "version": 1,
+  "inputs": {"repo_snapshot": "forge-eval-mvp", "feature_request": "Verify consistency"},
+  "ref_outputs": {
+    "phase_outputs": {
+      "phase": 8, "status": "completed",
+      "artifacts": [],
+      "decisions": ["Consistent"],
+      "quality_gate": {"work_count": 1, "exit_code": 0, "tool_version": "forge-eval-1.0"}
+    }
+  },
+  "metadata": {
+    "tags": ["level-4", "consistency", "golden"],
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "checklist_status": "approved",
+    "notes": "Golden L4 consistency"
+  }
+}

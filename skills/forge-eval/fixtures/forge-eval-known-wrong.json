@@ -1,0 +1,47 @@
+{
+  "corpus_type": "known-wrong",
+  "description": "Anti-corpus of deliberately non-compliant fixtures for forge-eval MVP",
+  "fixtures": [
+    {
+      "id": "fixture-wrong-l1-missing-design",
+      "path": "trees/fixture-wrong-l1-missing-design/fixture.json",
+      "level": 1,
+      "grader": "grader-l1-file-exists",
+      "expected_violation": "Missing required file: design/DESIGN.md"
+    },
+    {
+      "id": "fixture-wrong-l2-no-symbol",
+      "path": "trees/fixture-wrong-l2-no-symbol/fixture.json",
+      "level": 2,
+      "grader": "grader-l2-symbol-defined",
+      "expected_violation": "Required symbols (run-grader, jq, yq) missing from bin/run-grader.sh"
+    },
+    {
+      "id": "fixture-wrong-l3-has-secret",
+      "path": "trees/fixture-wrong-l3-has-secret/fixture.json",
+      "level": 3,
+      "grader": "grader-l3-no-secrets",
+      "expected_violation": "AWS secret pattern detected in config.env (test fixture data only)"
+    },
+    {
+      "id": "fixture-wrong-l4-zero-work",
+      "path": "trees/fixture-wrong-l4-zero-work/fixture.json",
+      "level": 4,
+      "grader": "grader-l4-proof-of-work",
+      "expected_violation": "work_count=0 fails proof-of-work check"
+    },
+    {
+      "id": "fixture-wrong-l5-tautology",
+      "path": "trees/fixture-wrong-l5-tautology/fixture.json",
+      "level": 5,
+      "grader": "grader-l5-tautology-heuristic",
+      "expected_violation": "Tests contain only tautological assertions (expect(true).toBe(true))"
+    }
+  ],
+  "metadata": {
+    "total_fixtures": 5,
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "notes": "Anti-corpus: one genuinely failing fixture per level L1-L5. Each deliberately violates its target grader. All expected to FAIL/REJECT."
+  }
+}

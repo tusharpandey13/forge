@@ -1,0 +1,30 @@
+{
+  "id": "fixture-golden-l1-basic",
+  "version": 1,
+  "inputs": {
+    "repo_snapshot": "forge-eval-mvp",
+    "feature_request": "Create offline deterministic grader for phase outputs"
+  },
+  "ref_outputs": {
+    "phase_outputs": {
+      "phase": 8,
+      "status": "completed",
+      "artifacts": [
+        {"path": "design/DESIGN.md", "sha": "abc123", "size_bytes": 2048}
+      ],
+      "decisions": ["L1 files present and readable"],
+      "quality_gate": {
+        "work_count": 3,
+        "exit_code": 0,
+        "tool_version": "forge-eval-1.0"
+      }
+    }
+  },
+  "metadata": {
+    "tags": ["level-1", "file-exists", "golden"],
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "checklist_status": "approved",
+    "notes": "Golden L1 fixture: all required files present"
+  }
+}

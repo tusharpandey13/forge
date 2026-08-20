@@ -1,0 +1,16 @@
+id: grader-l1-file-exists
+level: 1
+description: Verify required artifact files exist on disk (positive presence)
+rules:
+  - id: rule-design-exists
+    check: file_exists
+    path: design/DESIGN.md
+    threshold: 1.0
+  - id: rule-phase-output-exists
+    check: file_exists
+    path: .phase-output.json
+    threshold: 1.0
+  - id: rule-impl-plan-exists
+    check: file_exists
+    path: plan/IMPL-PLAN.md
+    threshold: 1.0

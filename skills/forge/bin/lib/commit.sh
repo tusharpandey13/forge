@@ -47,6 +47,13 @@ out_ok() {
   fi
 }
 
+validate_slug() {
+  local slug="$1"
+  if [[ ! "$slug" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    out_error "invalid slug '${slug}': must match ^[A-Za-z0-9_-]+\$"
+  fi
+}
+
 # ── ensure .forge git is initialized ─────────────────────────────────────────
 ensure_forge_git() {
   if [[ ! -d "${FORGE_DIR}/.git" ]]; then
@@ -73,6 +80,7 @@ ensure_forge_git() {
 cmd_commit_phase() {
   [[ $# -ge 3 ]] || out_error "usage: forge commit-phase <slug> <N> <status> [flags]"
   local slug="$1" phase_num="$2" status="$3"
+  validate_slug "$slug"
   shift 3
 
   local log_line=""
@@ -166,7 +174,9 @@ cmd_commit_phase() {
   local sha
   sha="$(git -C "${FORGE_DIR}" rev-parse HEAD)"
 
-  # Update latest_commit in state.json if it exists
+  # Update latest_commit in state.json AND persist ghost ref envelope so rollback
+  # can find it. BLK-3: phase bulk (NN.json) should already be written before this
+  # call; we only update the thin index entry here (index rename last).
   if [[ -f "$STATE_FILE" ]]; then
     python3 - "$STATE_FILE" "$slug" "$phase_num" "$status" "$sha" "$ghost_sha" <<'PYEOF'
 import json, sys, os, datetime
@@ -186,6 +196,24 @@ state["latest_commit"] = {
     # NOTE: ghost_sha resolves in PROJECT repo .git, not .forge/.git
     "ghost_sha_repo": "project"
 }
+
+# Persist ghost SHA as a ghost ref envelope in the phase index entry so rollback
+# can find it via ref_at_n.get("type") == "ghost". (REF-SPEC envelope format)
+if ghost_sha:
+    for feat in state.get("features", []):
+        if (feat.get("slug") or feat.get("id")) == slug:
+            phases = feat.setdefault("phases", {})
+            phase_key = str(int(phase_num))
+            phase_entry = phases.setdefault(phase_key, {})
+            # Write ghost ref envelope — BLK-3: NN.json bulk already written
+            # before commit-phase; index update (rename) is last.
+            phase_entry["ref"] = {
+                "type": "ghost",
+                "repo": "project",
+                "locator": ghost_sha,
+                "summary": f"ghost snapshot @ phase {phase_num}"
+            }
+            break
 
 tmp = state_file + ".tmp." + os.urandom(4).hex()
 with open(tmp, "w") as f:

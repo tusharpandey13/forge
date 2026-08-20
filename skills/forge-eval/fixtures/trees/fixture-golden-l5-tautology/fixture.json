@@ -1,0 +1,20 @@
+{
+  "id": "fixture-golden-l5-tautology",
+  "version": 1,
+  "inputs": {"repo_snapshot": "forge-eval-mvp", "feature_request": "Verify test code"},
+  "ref_outputs": {
+    "phase_outputs": {
+      "phase": 8, "status": "completed",
+      "artifacts": [],
+      "decisions": ["Real code symbols"],
+      "quality_gate": {"work_count": 1, "exit_code": 0, "tool_version": "forge-eval-1.0"}
+    }
+  },
+  "metadata": {
+    "tags": ["level-5", "tautology-heuristic", "golden"],
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "checklist_status": "approved",
+    "notes": "Golden L5 tautology: real code symbols"
+  }
+}

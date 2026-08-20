@@ -1,0 +1,9 @@
+id: grader-l4-proof-of-work
+level: 4
+description: Verify proof-of-work; work_count > 0 and exit_code == 0 (structural)
+rules:
+  - id: rule-work-count-nonzero
+    check: proof_of_work
+    phase_output_path: .phase-output.json
+    min_work_count: 1
+    threshold: 1.0

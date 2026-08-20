@@ -1,0 +1,60 @@
+{
+  "corpus_type": "golden",
+  "description": "Golden regression-fixture corpus for forge-eval MVP",
+  "fixtures": [
+    {
+      "id": "fixture-golden-l1-basic",
+      "path": "trees/fixture-golden-l1-basic/fixture.json",
+      "level": 1,
+      "grader": "grader-l1-file-exists"
+    },
+    {
+      "id": "fixture-golden-l1-complete",
+      "path": "trees/fixture-golden-l1-complete/fixture.json",
+      "level": 1,
+      "grader": "grader-l1-file-exists"
+    },
+    {
+      "id": "fixture-golden-l2-symbols",
+      "path": "trees/fixture-golden-l2-symbols/fixture.json",
+      "level": 2,
+      "grader": "grader-l2-symbol-defined"
+    },
+    {
+      "id": "fixture-golden-l3-clean",
+      "path": "trees/fixture-golden-l3-clean/fixture.json",
+      "level": 3,
+      "grader": "grader-l3-no-secrets"
+    },
+    {
+      "id": "fixture-golden-l4-proof",
+      "path": "trees/fixture-golden-l4-proof/fixture.json",
+      "level": 4,
+      "grader": "grader-l4-proof-of-work"
+    },
+    {
+      "id": "fixture-golden-l4-consistency",
+      "path": "trees/fixture-golden-l4-consistency/fixture.json",
+      "level": 4,
+      "grader": "grader-l4-consistency"
+    },
+    {
+      "id": "fixture-golden-l5-tautology",
+      "path": "trees/fixture-golden-l5-tautology/fixture.json",
+      "level": 5,
+      "grader": "grader-l5-tautology-heuristic"
+    },
+    {
+      "id": "fixture-golden-l5-surface",
+      "path": "trees/fixture-golden-l5-surface/fixture.json",
+      "level": 5,
+      "grader": "grader-l5-surface-aware"
+    }
+  ],
+  "metadata": {
+    "total_fixtures": 8,
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "notes": "MVP golden corpus: L1 (2), L2 (1), L3 (1), L4 (2), L5 (2). All intended to PASS their respective graders."
+  }
+}

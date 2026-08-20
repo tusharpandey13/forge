@@ -1,0 +1,20 @@
+{
+  "id": "fixture-wrong-l5-tautology",
+  "version": 1,
+  "inputs": {"repo_snapshot": "forge-eval-mvp", "feature_request": "Tautology test"},
+  "ref_outputs": {
+    "phase_outputs": {
+      "phase": 8, "status": "failed",
+      "artifacts": [],
+      "decisions": ["Tautology detected"],
+      "quality_gate": {"work_count": 0, "exit_code": 1, "tool_version": "forge-eval-1.0"}
+    }
+  },
+  "metadata": {
+    "tags": ["level-5", "tautology-heuristic", "known-wrong"],
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "checklist_status": "approved",
+    "notes": "KNOWN-WRONG L5: tests only assert bare literals (expect(true).toBe(true))"
+  }
+}

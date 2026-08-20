@@ -1,0 +1,20 @@
+{
+  "id": "fixture-golden-l1-complete",
+  "version": 1,
+  "inputs": {"repo_snapshot": "forge-eval", "feature_request": "Complete L1 setup"},
+  "ref_outputs": {
+    "phase_outputs": {
+      "phase": 8, "status": "completed",
+      "artifacts": [],
+      "decisions": ["All L1 files present"],
+      "quality_gate": {"work_count": 3, "exit_code": 0, "tool_version": "forge-eval-1.0"}
+    }
+  },
+  "metadata": {
+    "tags": ["level-1", "file-exists", "golden"],
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "checklist_status": "approved",
+    "notes": "Complete L1 golden fixture"
+  }
+}

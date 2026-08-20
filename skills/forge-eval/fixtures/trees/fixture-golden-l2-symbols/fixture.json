@@ -1,0 +1,20 @@
+{
+  "id": "fixture-golden-l2-symbols",
+  "version": 1,
+  "inputs": {"repo_snapshot": "forge-eval-mvp", "feature_request": "Verify symbol definitions"},
+  "ref_outputs": {
+    "phase_outputs": {
+      "phase": 8, "status": "completed",
+      "artifacts": [],
+      "decisions": ["L2 symbols present"],
+      "quality_gate": {"work_count": 3, "exit_code": 0, "tool_version": "forge-eval-1.0"}
+    }
+  },
+  "metadata": {
+    "tags": ["level-2", "symbol-defined", "golden"],
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "checklist_status": "approved",
+    "notes": "Golden L2: symbols jq, yq, run-grader present"
+  }
+}

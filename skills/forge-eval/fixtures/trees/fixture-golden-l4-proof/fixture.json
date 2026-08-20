@@ -1,0 +1,20 @@
+{
+  "id": "fixture-golden-l4-proof",
+  "version": 1,
+  "inputs": {"repo_snapshot": "forge-eval-mvp", "feature_request": "Verify proof of work"},
+  "ref_outputs": {
+    "phase_outputs": {
+      "phase": 8, "status": "completed",
+      "artifacts": [],
+      "decisions": ["Proof verified"],
+      "quality_gate": {"work_count": 42, "exit_code": 0, "tool_version": "forge-eval-1.0"}
+    }
+  },
+  "metadata": {
+    "tags": ["level-4", "proof-of-work", "golden"],
+    "created_date": "2026-07-21T00:00:00Z",
+    "human_reviewer": "Tushar Pandey",
+    "checklist_status": "approved",
+    "notes": "Golden L4 proof: work_count=42, exit_code=0"
+  }
+}

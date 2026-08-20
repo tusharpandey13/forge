@@ -24,6 +24,14 @@ FORGE_DIR="${FORGE_DIR}"
 
 py() { python3 -c "$1" "${@:2}"; }
 
+# ── slug validation ───────────────────────────────────────────────────────────
+validate_slug() {
+  local slug="$1"
+  if [[ ! "$slug" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    out_error "invalid slug '${slug}': must match ^[A-Za-z0-9_-]+\$"
+  fi
+}
+
 # ── output helpers ───────────────────────────────────────────────────────────
 out_error() {
   if [[ "$JSON_MODE" -eq 1 ]]; then
@@ -77,6 +85,19 @@ PYEOF
     git -C "${FORGE_DIR}" config tag.gpgsign false
     git -C "${FORGE_DIR}" config user.name "forge"
     git -C "${FORGE_DIR}" config user.email "forge@local"
+  fi
+
+  # Auto-install ghost-guard in the project repo (fail-open: warn but don't fail init).
+  # This ensures forge-ghost/* refs are never accidentally pushed.
+  local ghost_sh="${FORGE_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}/ghost.sh"
+  if [[ -x "$ghost_sh" ]]; then
+    FORGE_JSON_MODE=0 \
+    FORGE_PROJECT_ROOT="${FORGE_PROJECT_ROOT}" \
+    FORGE_STATE="${FORGE_STATE}" \
+    FORGE_DIR="${FORGE_DIR}" \
+    bash "$ghost_sh" ghost-guard install 2>/dev/null \
+      && true \
+      || printf 'forge/init: warn: ghost-guard install skipped (no project git or hook write failed)\n' >&2
   fi
 }
 
@@ -286,6 +307,7 @@ PYEOF
 cmd_merge() {
   [[ $# -ge 3 ]] || out_error "usage: forge merge <slug> <phase> <output-json>"
   local slug="$1" phase_num="$2" output_file="$3"
+  validate_slug "$slug"
   [[ -f "$output_file" ]] || out_error "output file not found: $output_file"
   [[ -f "$STATE_FILE" ]] || out_error "state.json not found"
 
@@ -373,6 +395,7 @@ PYEOF
 cmd_mark_complete() {
   [[ $# -ge 3 ]] || out_error "usage: forge mark-complete <slug> <phase> <status> [--summary '...']"
   local slug="$1" phase_num="$2" status="$3"
+  validate_slug "$slug"
   shift 3
   local summary=""
   while [[ $# -gt 0 ]]; do
@@ -474,6 +497,7 @@ PYEOF
 cmd_invalidate_downstream() {
   [[ $# -ge 2 ]] || out_error "usage: forge invalidate-downstream <slug> <phase>"
   local slug="$1" phase_num="$2"
+  validate_slug "$slug"
   [[ -f "$STATE_FILE" ]] || out_error "state.json not found"
 
   python3 - "$STATE_FILE" "$slug" "$phase_num" <<'PYEOF'
