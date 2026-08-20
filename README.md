@@ -238,13 +238,54 @@ This command:
 4. Commits migration with full audit trail in operations.jsonl
 5. Archives or deletes old structure (user confirms)
 
+## Exec Layer (v2)
+
+All deterministic operations go through a single shell dispatcher at `skills/forge/bin/forge`.
+SKILL.md locates it relative to itself:
+
+```bash
+FORGE_BIN="<skill_dir>/bin/forge"
+$FORGE_BIN <verb> [args...]
+```
+
+Workers never read `state.json` directly -- only via `forge slice` or `forge ref`.
+All state mutations route through this entrypoint so the call sites are stable if the shell
+scripts are later replaced by a compiled binary.
+
+Available verbs: `init` | `status` | `slice` | `merge` | `save` | `mark-complete` |
+`invalidate-downstream` | `repair` | `ref` | `archive` | `ghost-snapshot` | `ghost-diff` |
+`ghost-guard` | `commit-phase` | `log-query` | `rollback` | `metadata` | `autowrite-phase` |
+`cascade-fix`
+
+**State schema v2 (thin index):** Phase entries in `state.json` hold a ref envelope pointer
+plus a summary string. Bulk content (artifacts, decisions, execution details) lives in
+`features/<slug>/phases/NN.json` and is only read on demand. This replaced the v1 pattern of
+inlining all phase data into the hot index, which caused state.json to balloon as completed
+features accumulated.
+
+**Git-as-log:** FORGE-LOGS.md and its generator are removed. Phase completions commit to
+`.forge/.git` with structured trailers (`ghost-sha:`, `artifacts:`, `feature:`, `phase:`).
+Audit and timeline reconstruction use `forge log-query [--feature <slug>] [--phase N]`.
+
+**Ghost branch:** Project tree snapshots live on `forge-ghost/<slug>` in the project repo,
+written via a dedicated temp index without touching the user's index, HEAD, or working branch.
+Run `forge ghost-guard install` to add a pre-push hook that prevents these internal branches
+from being pushed.
+
+**Stop hook (manual setup):** `skills/forge/bin/hooks/forge-stop-hook.sh` flushes in-progress
+phases to `.forge/.git` on Claude Code session Stop. See
+`skills/forge/references/auto-write.md` for the `settings.json` registration snippet.
+
 ## Known Limitations & Future Work
 
 - **Single active feature** — One feature per state.json; future: `forge switch <feature>` for multi-feature support
-- **Manual migration** — Old projects require explicit `forge migrate` command (safe, transparent)
-- **Lock-based concurrency** — Supports single-user workflows; multi-user simultaneously editing state.json not supported
+- **v1-to-v2 migration** — Only migrated for this repo. Other projects need `forge archive` + `forge metadata migrate-learnings` applied manually; a future `forge migrate` command is planned. The `"version": "2.0"` field in state.json flags which schema is in use.
+- **Lock-based concurrency** — Stop hook and commit hook can race on the same phase; worst case is a duplicate commit in `.forge/.git`. Not blocked by a file lock.
+- **Stop hook is manual** — Must be wired into `settings.json` by hand (snippet in `references/auto-write.md`).
 
-For details on architecture decisions, edge cases, and extension points, see `forge/FORGE-DX-OVERHAUL-CONTEXT.md`.
+For details on architecture decisions and the token reduction design, see
+`features/forge-token-optimization/DOCUMENTATION.md` in the forge runtime directory, or
+`features/forge-token-optimization/context/CONTEXT.md` in this source tree.
 
 ## License
 
