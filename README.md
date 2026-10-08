@@ -1,250 +1,116 @@
-# Forge
+# Forge: 2x your dev productivity
 
-A dispatcher-based development workflow system for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Forge decomposes feature development into 12 reviewable phases — from requirements through documentation — with structured state management, background task agents, and cascade-aware change detection.
+`forge` is a skill that orchestrates development tasks, following principles of [spec-driven development](https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/).
 
-## Why Forge?
+## What it solves 👀
 
-LLM-assisted coding works best with clear boundaries and persistent state. Without structure, context windows bloat, reviews get skipped, decisions go undocumented, and implementation drifts from requirements. Forge solves this by enforcing a phased workflow with:
+**Are you tired of:**
 
-**Key principles:**
+- Scattered context across files, agent-conversations, docs?
+- Repeated prompting for dev-tasks in iterative cycles?
+- Manual agent-conversation tracking?
+- SLOW dev-workflows?
 
-- **Stateful orchestration** — `.forge/state.json` as source of truth; task agents run in background via `qc-readonly`
-- **Artifact boundary enforcement** — all forge outputs under `.forge/features/<feature-slug>/` with feature-scoped isolation
-- **Hardened git operations** — dedicated `.forge/.git` with defensive config (no GPG, no hooks, no user identity leak)
-- **Cascade detection** — bidirectional dependency graph detects when changes invalidate downstream phases
-- **Central context hub** — FORGE-LOGS.md auto-generated from state.json; full feature history preserved across sessions
-- **Review gates** — phases 3, 5, 7, 9, 11 are reviews; critical/major findings block progression
-- **Parallel execution** — independent phases run concurrently; orchestrator merges state updates atomically
+## How `forge` solves this ✨
 
-## Installation
+- ONE home for all your context
+- All the good parts of spec-driven-development
+- Dev-tasks packaged as **Claude skills**
+- `git`-tracked dev workflows (for easy rollbacks)
 
-Copy the `skills/` directory into your Claude Code configuration:
+---
 
-```bash
-cp -r skills/* ~/.claude/skills/
-```
+## How it works
 
-Claude Code automatically discovers skills in `~/.claude/skills/`. Each subdirectory with a `SKILL.md` file becomes an available skill.
+- An SDD-inspired workflow consisting of packaged skills for:
+  - Requirement analysis + refinement
+  - Design creation (interactive)
+  - Implementation planning
+  - Parallel implementation (using Claude subagents)
+  - Cascading review of changes
+- Artifacts for each step, all **review-able**
+  - REQUIREMENTS.md
+  - DESIGN.md
+  - IMPLEMENTATION-PLAN.md
+  - Review / analysis artifacts
 
-## Getting Started
+## Let's talk about results 📈
 
-### 1. Initialize
+- Battle tested on **real production SDK features** — shipped multiple merged PRs in large open-source codebases, including net-new features and tech-debt cleanup.
+- Language agnostic and extensible.
 
-Run the forge orchestrator in Claude Code:
+---
 
-```
-/forge
-```
+## Example: Adding an API Rate Limiter
 
-Forge will:
-- Create `.forge/` directory for internal state (config, git, state machine)
-- Create `.forge/features/` for feature isolation
-- Detect your codebase conventions (language, framework, naming patterns, test setup)
-- Create `.forge/FORGE-CONFIG.md` with detected conventions
-- Initialize `.forge/.git` with defensive config (idempotent, safe to re-run)
+<details>
+<summary>Example (expand)</summary>
 
-### 2. Add context
+A developer needs to add rate limiting to an Express API. Here's what a Forge session looks like:
 
-Place any external context (PRDs, specs, issue descriptions) as markdown files in `.forge/features/<feature-slug>/context/`.
+> **Developer:** `/forge`
 
-### 3. Run the workflow
+Forge scans the codebase, detects Express + TypeScript + vitest, and writes a config file with detected conventions. Prompts the developer to drop context and begin.
 
-Say "analyze requirements" to start Phase 1, or just `/forge` to see current status and next step at any point.
+> **Developer:** *drops a ticket into* `forge/context/` — "analyze requirements with forge"
 
-## Workspace Structure
+Forge reads the ticket and asks 6 clarifying questions — per-user vs global limits? Redis or in-memory? What response headers? The developer answers from chat and docs. Forge writes **REQUIREMENTS.md** with 4 functional requirements, 2 non-functional requirements, and 3 edge cases.
 
-```
-project/
-├── .forge/                          # Internals (auto-managed, gitignored)
-│   ├── .git/                        # Forge internal git repo (defensive config)
-│   ├── state.json                   # Machine-readable source of truth
-│   ├── operations.jsonl             # Append-only operation audit trail
-│   ├── FORGE-CONFIG.md              # Detected conventions + user config
-│   ├── FORGE-LOGS.md                # Auto-generated human-readable view
-│   └── features/
-│       └── <feature-slug>/
-│           ├── requirement/REQUIREMENTS.md
-│           ├── design/DESIGN.md
-│           ├── design/DESIGN-REVIEW-*.md
-│           ├── plan/IMPL-PLAN.md, TEST-PLAN.md
-│           ├── plan/*-REVIEW-*.md
-│           ├── review/CODE-REVIEW-*.md, TEST-REVIEW-*.md
-│           └── context/              # User-provided context files
-└── src/                             # Your source code (untouched by forge)
-```
+> **Developer:** "create design with forge"
 
-**New in DX Overhaul:**
-- `.forge/state.json` — Machine-readable state: phases, artifacts, decisions, dependency graph, execution metadata
-- `.forge/operations.jsonl` — Append-only log of all state mutations (audit trail + rollback recovery)
-- `.forge/features/<slug>/` — Feature-scoped directories replace flat `forge/requirement/`, `forge/design/` structure
-- All paths absolute in state.json and agent prompts (no relative path ambiguity)
+Forge identifies 2 design decisions with multiple viable options. It researches each option in parallel using dedicated sub-agents, writes analysis artifacts, and presents a structured comparison: *"DD-1: Redis vs in-memory? DD-2: Token bucket vs sliding window?"* The developer picks Redis + sliding window. Forge writes **DESIGN.md** with contracts, wire formats, and a test matrix.
 
-## Workflow
+> **Developer:** "review the design with forge"
 
-```
- Phase    Action                    Skill                           Output
- -----    ------                    -----                           ------
-  1       Requirement Analysis      forge-requirement-analysis      REQUIREMENTS.md
-  2       Design Creation           forge-design-creation           DESIGN.md + research
-  3       Design Review             forge-review                    DESIGN-REVIEW-1.md (gate)
-  4       Implementation Planning   forge-implementation-planning   IMPL-PLAN.md
-  5       Impl Plan Review          forge-review                    IMPL-PLAN-REVIEW-1.md (gate)
-  6       Test Planning             forge-test-planning             TEST-PLAN.md
-  7       Test Plan Review          forge-review                    TEST-PLAN-REVIEW-1.md (gate)
-  8       Code Implementation       forge-implement                 Source code
-  9       Code Review               forge-review                    CODE-REVIEW-1.md (gate)
- 10       Test Implementation       forge-implement-tests           Test code
- 11       Test Review               forge-review                    TEST-REVIEW-1.md (gate)
- 12       Documentation             forge-documentation             Docs + CONTEXT.md
-```
+Forge reviews the design against requirements. Finds 1 MAJOR issue — missing 429 response shape. Developer fixes it. Re-review passes. Gate cleared.
 
-Phases 1, 2, 4, 6, 8, 10, 12 dispatch to `qc-readonly` task agents (background execution). Phases 3, 5, 7, 9, 11 are review gates; results surface immediately to orchestrator.
+> **Developer:** "create implementation plan"
 
-### State Management
+Forge analyzes the codebase, finds existing middleware patterns, and produces **IMPL-PLAN.md**: 3 implementation units across 2 tiers, with 2 units parallelizable. *Plan review, test planning, and test plan review follow the same pattern.*
 
-`.forge/state.json` is the source of truth:
+> **Developer:** "implement with forge"
 
-```json
-{
-  "version": "1.0",
-  "features": [{
-    "id": "feature-slug",
-    "name": "Feature Name",
-    "status": "in_progress",
-    "phases": {
-      "1": {
-        "status": "approved",
-        "artifacts": [{path, sha, size}],
-        "decisions": ["DD-1: ...", "DD-2: ..."]
-      },
-      "2": {...},
-      "3": {
-        "status": "approved",
-        "review_findings": {"critical": 0, "major": 0, "minor": 2},
-        "gate": "PASS"
-      }
-    },
-    "dependency_graph": {
-      "forward": {"design-path": ["plan-path", "test-plan-path"]},
-      "backward": {"design-path": ["requirement-path"]}
-    }
-  }],
-  "latest_commit": {"sha": "...", "message": "..."}
-}
-```
+Forge translates pseudocode to production code following detected conventions. Runs Tier 1 units in parallel, then Tier 2 sequentially. Quality gate (vitest + tsc + eslint) passes.
 
-**Key features:**
-- Single JSON source of truth (no manual editing required)
-- Dependency graph enables cascade detection (bidirectional edges)
-- Execution metadata for observability (reasoning lines, context usage)
-- Artifact index with SHAs (git tracking + rollback support)
+> **Developer:** "implement tests with forge"
 
-### Context Management
+Forge writes tests matching existing vitest patterns and conventions. 14 tests, 92% coverage. Quality gate passes.
 
-Start a **new conversation** between major phases to keep context focused. FORGE-LOGS.md + state.json provide full continuity.
+> **Developer:** "document with forge"
 
-Suggested conversation boundaries:
-- After Phase 1 → new conversation for Phase 2
-- After Phase 3 → new conversation for Phase 4
-- After Phase 7 → new conversation for Phase 8
-- After Phase 11 → new conversation for Phase 12
+Forge adds docstrings, updates README, and writes **CONTEXT.md** — a summary for future developers. Feature complete. Full artifact trail preserved.
 
-Run `/forge` at any point to see full status dashboard + next step.
+**Total output:** 7 versioned documents + review history + design research artifacts.
 
-### Commands
+</details>
 
-**`/forge`** — Display orchestrator status (always first output)
-- Shows: current phase, started date, phase timeline (all 12 phases + status icons), latest commit
-- Nudges: next action based on current phase
+## Architecture
 
-**`forge status`** — Phase timeline (concise)
+Zero infrastructure, Claude-Code-based state machine.
 
-**`forge report`** — All review findings aggregated by phase (critical/major/minor/suggestion counts)
+- **Specialized skills:** installed as markdown files in Claude Code's skill directory
+- **Stack-agnostic**: adapts to any language, framework, or project structure
+- **Artifact-based handoffs**: skills communicate through files, not conversation context
+- **Pluggable**: use individual skills standalone or the full phased workflow
 
-**`forge affected <artifact-path>`** — Impact analysis via cascade detector
-- Shows: downstream phases invalidated by this artifact change
-- Shows: upstream phases this artifact depends on
+### Key Capabilities
 
-**`forge cascade-fix`** — Automatically re-run all invalidated phases in dependency order
+<details>
+<summary>Capabilities (expand)</summary>
 
-## Skills Reference
+**Automated convention detection** — On first run, Forge scans the codebase and auto-detects language, framework, naming patterns, test setup, and quality gate commands. Developers confirm; Forge adapts.
 
-### Core Skills (18 total)
+**Persistent state across sessions** — A structured log file tracks every phase, decision, and artifact. Starting a new chat loses nothing — the AI reads the log and picks up exactly where it left off.
 
-**Orchestration:**
-- **forge** — Main dispatcher. Loads state, displays status, dispatches phases to task agents, polls for completion, handles cascade detection.
-- **forge-migrate** — Migrates existing forge projects from old structure to new state.json model with feature namespacing.
+**Interactive design decisions** — When multiple architectural approaches exist, Forge researches each option in parallel, presents a structured comparison, and lets the developer choose. Decisions and rationale are captured permanently.
 
-**Phases 1-12:**
-- **forge-requirement-analysis** (Phase 1) — Extracts specs from context. Outputs: REQUIREMENTS.md
-- **forge-design-creation** (Phase 2) — Creates technical design with decision research. Outputs: DESIGN.md + artifacts
-- **forge-review** (Phase 3, 5, 7, 9, 11) — Systematic review with severity ranking. Outputs: REVIEW-N.md (gate check)
-- **forge-implementation-planning** (Phase 4) — Converts design to implementation units. Outputs: IMPL-PLAN.md
-- **forge-test-planning** (Phase 6) — Builds test plan from impl plan. Outputs: TEST-PLAN.md
-- **forge-implement** (Phase 8) — Translates plan to code following conventions. Outputs: Source code
-- **forge-implement-tests** (Phase 10) — Translates test plan to test code. Outputs: Test code
-- **forge-documentation** (Phase 12) — Adds docstrings, updates README, creates CONTEXT.md. Outputs: Docs + CONTEXT.md
+**Review gates with severity tracking** — Every artifact is reviewed before the next phase begins. Findings are ranked (Critical / Major / Minor / Suggestion) and persisted as numbered review artifacts with resolution tracking across rounds.
 
-**Automation:**
-- **forge-autopilot** — Orchestrates full pipeline with coordinated sub-agents (optional; use when comfortable with end-to-end automation)
+**Auto-parallelized implementation** — The implementation plan declares unit dependencies. Forge builds a dependency graph and automatically parallelizes independent units when running in orchestrated mode.
 
-**Support:**
-- **quorum** — Multi-agent consensus for complex decisions
+**Full autopilot mode** — For teams comfortable with automation, Forge can run the entire pipeline end-to-end using coordinated sub-agents, pausing only for user decisions and escalations.
 
-All skills are stored in `skills/*/SKILL.md` files. See individual skill files for detailed instructions.
-
-## Performance & Parallelism
-
-- **Status check:** <500ms (reads state.json only)
-- **Phase dispatch:** <1s (construct prompt, spawn task agent)
-- **Report generation:** <2s (read state.json + review artifacts)
-- **Parallel execution:** Independent phases (4 & 6, 8 & 10) run concurrently; orchestrator atomically merges state updates
-
-Phases with dependencies are automatically ordered (e.g., Phase 3 review must complete before Phase 4 plan starts).
-
-## Cascade Detection & Invalidation
-
-When an artifact changes (e.g., design approved, then requirements re-opened):
-
-1. **Detect affected phases** — Cascade detector traverses dependency graph (forward + backward edges)
-2. **Invalidate downstream** — All phases depending on changed artifact marked `invalidated` in state.json
-3. **Mark upstream for review** — Phases the changed artifact depends on may need re-validation
-4. **Re-run on demand** — User can run `forge affected <path>` to see impact, then `forge cascade-fix` to re-execute all invalidated phases in dependency order
-
-Example: Design change → invalidates Plan, Test Plan, Code, Tests
-
-## Git Operations
-
-Forge maintains a dedicated `.forge/.git` repository:
-
-- **Defensive initialization** — No GPG signing, no hooks, isolated identity (`forge@local`)
-- **Idempotent init** — Safe to run `/forge` multiple times; existing config persists
-- **Atomic commits** — After each phase, orchestrator commits artifacts with SHA recorded in state.json
-- **Rollback support** — Git history enables recovery to any prior phase (with state consistency)
-- **Separate from project git** — Never interferes with user's global config or project repository
-
-## Migration from Old Structure
-
-If you have an existing forge project with artifacts in `forge/requirement/`, `forge/design/`, etc.:
-
-```
-/forge-migrate --feature <slug>
-```
-
-This command:
-1. Reads old FORGE-LOGS.md and artifacts
-2. Generates state.json with feature namespacing
-3. Moves artifacts to `.forge/features/<slug>/`
-4. Commits migration with full audit trail in operations.jsonl
-5. Archives or deletes old structure (user confirms)
-
-## Known Limitations & Future Work
-
-- **Single active feature** — One feature per state.json; future: `forge switch <feature>` for multi-feature support
-- **Manual migration** — Old projects require explicit `forge migrate` command (safe, transparent)
-- **Lock-based concurrency** — Supports single-user workflows; multi-user simultaneously editing state.json not supported
-
-For details on architecture decisions, edge cases, and extension points, see `forge/FORGE-DX-OVERHAUL-CONTEXT.md`.
+</details>
 
 ## License
 
