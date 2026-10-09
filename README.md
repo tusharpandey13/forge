@@ -4,6 +4,8 @@
 
 ## What it solves 👀
 
+![Convert unstructured conversations into deterministic dev processes](docs/images/image-20260224-102236.png)
+
 **Are you tired of:**
 
 - Scattered context across files, agent-conversations, docs?
@@ -21,6 +23,8 @@
 ---
 
 ## How it works
+
+![Forge workflow: Define (Requirements, Design, Review) then Implement (Plan, Review, Parallel implementation, Review)](docs/images/image-20260224-095201.png)
 
 - An SDD-inspired workflow consisting of packaged skills for:
   - Requirement analysis + refinement
@@ -87,6 +91,8 @@ Forge adds docstrings, updates README, and writes **CONTEXT.md** — a summary f
 ## Architecture
 
 Zero infrastructure, Claude-Code-based state machine.
+
+![Forge architecture: orchestrator dispatches to skills, which modify the codebase and write artifacts; state, config, and artifacts are tracked using git](docs/images/image-20260224-105554.png)
 
 - **Specialized skills:** installed as markdown files in Claude Code's skill directory
 - **Stack-agnostic**: adapts to any language, framework, or project structure
